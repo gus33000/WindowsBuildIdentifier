@@ -569,7 +569,7 @@ namespace WindowsBuildIdentifier
                                 result = "SmallBusinessServerRestricted";
                                 break;
                             }
-                        case "Blade":
+                        case "blade":
                             {
                                 result = "ServerWeb";
                                 break;
