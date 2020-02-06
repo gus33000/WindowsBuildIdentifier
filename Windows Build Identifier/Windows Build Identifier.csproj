@@ -163,6 +163,7 @@
     <Compile Include="SevenZipExtractor\SevenZipFormat.cs" />
     <Compile Include="SevenZipExtractor\SevenZipHandle.cs" />
     <Compile Include="SevenZipExtractor\SevenZipInterface.cs" />
+    <Compile Include="VHDInstallProviderInterface.cs" />
     <Compile Include="WIMInstallProviderInterface.cs" />
     <Compile Include="WindowsInstallProviderInterface.cs" />
     <Compile Include="XmlFormats\WIM.cs" />

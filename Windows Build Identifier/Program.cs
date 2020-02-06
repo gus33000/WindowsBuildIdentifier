@@ -155,6 +155,17 @@ namespace WindowsBuildIdentifier
             }
         }
 
+        static void IdentifyVHD(string vhdpath)
+        {
+            using (FileStream vhdStream = File.Open(vhdpath, FileMode.Open))
+            {
+                VHDInstallProviderInterface provider = new VHDInstallProviderInterface(vhdStream);
+
+                var report = IdentifyWindowsInstall.IdentifyWindows(provider);
+                IdentifyWindowsInstall.DisplayReport(report);
+            }
+        }
+
         static void Main(string[] args)
         {
             Console.WriteLine();
@@ -181,6 +192,12 @@ namespace WindowsBuildIdentifier
 
             foreach (var isopath in Directory.GetFiles(args[0], "*.iso", SearchOption.AllDirectories))
             {
+                /*Console.WriteLine();
+                Console.WriteLine();
+                Console.WriteLine("Opening VHD File");
+                Console.WriteLine(isopath);
+                IdentifyVHD(isopath);*/
+
                 Console.WriteLine();
                 Console.WriteLine();
                 Console.WriteLine("Opening ISO File");
