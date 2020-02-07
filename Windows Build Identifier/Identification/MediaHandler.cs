@@ -294,6 +294,7 @@ namespace WindowsBuildIdentifier.Identification
                 Console.WriteLine(ex.ToString());
             }
         }
+
         public static void IdentifyWindowsFromVMDK(string vhdpath)
         {
             Console.WriteLine();
@@ -313,6 +314,7 @@ namespace WindowsBuildIdentifier.Identification
                 Console.WriteLine(ex.ToString());
             }
         }
+
         public static void IdentifyWindowsFromVHDX(string vhdpath)
         {
             Console.WriteLine();
@@ -329,6 +331,7 @@ namespace WindowsBuildIdentifier.Identification
                 Console.WriteLine(ex.ToString());
             }
         }
+
         public static void IdentifyWindowsFromVDI(string vhdpath)
         {
             Console.WriteLine();
