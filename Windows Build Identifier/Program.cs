@@ -1,16 +1,16 @@
 ﻿/*
  * Copyright (c) 2020, Gustave Monce - gus33000.me - @gus33000
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
  * the rights to use, copy, modify, merge, publish, distribute, sublicense,
  * and/or sell copies of the Software, and to permit persons to whom the
  * Software is furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -25,6 +25,8 @@ using DiscUtils.Udf;
 using DiscUtils.Vfs;
 using SevenZipExtractor;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -33,9 +35,9 @@ using System.Xml.Serialization;
 
 namespace WindowsBuildIdentifier
 {
-    class Program
+    internal class Program
     {
-        static void IdentifyWIMSetup(Stream wimstream)
+        private static void IdentifyWIMSetup(Stream wimstream)
         {
             Console.WriteLine();
 
@@ -45,35 +47,35 @@ namespace WindowsBuildIdentifier
             Console.WriteLine("Parsing WIM information XML file");
             XmlFormats.WIMXml.WIM wim = GetWIMClassFromXml(xml);
 
-            Console.WriteLine("Found " + wim.IMAGE.Count() + " images in the wim according to the XML");
+            Console.WriteLine($"Found {wim.IMAGE.Length} images in the wim according to the XML");
 
             Console.WriteLine("Evaluating relevant images in the WIM according to the XML");
-            int irelevantcount2 = (wim.IMAGE.Any(x => x.DESCRIPTION.ToLower().Contains("winpe")) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION.ToLower().Contains("setup")) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION.ToLower().Contains("preinstallation")) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION.ToLower().Contains("winre")) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION.ToLower().Contains("recovery")) ? 1 : 0);
+            int irelevantcount2 = (wim.IMAGE.Any(x => x.DESCRIPTION.Contains("winpe", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                (wim.IMAGE.Any(x => x.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                (wim.IMAGE.Any(x => x.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                (wim.IMAGE.Any(x => x.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                (wim.IMAGE.Any(x => x.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0);
 
-            Console.WriteLine("Found " + irelevantcount2 + " irrelevant images in the wim according to the XML");
+            Console.WriteLine($"Found {irelevantcount2} irrelevant images in the wim according to the XML");
 
             foreach (var image in wim.IMAGE)
             {
                 Console.WriteLine();
-                Console.WriteLine("Processing index " + image.INDEX);
+                Console.WriteLine($"Processing index {image.INDEX}");
 
                 //
                 // If what we're trying to identify isn't just a winpe, and we are accessing a winpe image
                 // skip the image
                 //
-                int irelevantcount = (image.DESCRIPTION.ToLower().Contains("winpe") ? 1 : 0) +
-                    (image.DESCRIPTION.ToLower().Contains("setup") ? 1 : 0) +
-                    (image.DESCRIPTION.ToLower().Contains("preinstallation") ? 1 : 0) +
-                    (image.DESCRIPTION.ToLower().Contains("winre") ? 1 : 0) +
-                    (image.DESCRIPTION.ToLower().Contains("recovery") ? 1 : 0);
+                int irelevantcount = (image.DESCRIPTION.Contains("winpe", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                    (image.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                    (image.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                    (image.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                    (image.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0);
 
-                Console.WriteLine("Index contains " + irelevantcount + " flags indicating this is a preinstallation environment");
+                Console.WriteLine($"Index contains {irelevantcount} flags indicating this is a preinstallation environment");
 
-                if (irelevantcount != 0 && irelevantcount2 < wim.IMAGE.Count())
+                if (irelevantcount != 0 && irelevantcount2 < wim.IMAGE.Length)
                 {
                     Console.WriteLine("Skipping this image");
                     continue;
@@ -85,12 +87,10 @@ namespace WindowsBuildIdentifier
 
                 if (index != null && wim.IMAGE[0].INDEX == "0")
                 {
-                    using (ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim))
+                    using ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim);
+                    if (!archiveFile.Entries.Any(x => x.FileName.StartsWith("0\\")))
                     {
-                        if (!archiveFile.Entries.Any(x => x.FileName.StartsWith("0\\")))
-                        {
-                            WorkaroundForWIMFormatBug = true;
-                        }
+                        WorkaroundForWIMFormatBug = true;
                     }
                 }
 
@@ -100,7 +100,7 @@ namespace WindowsBuildIdentifier
                     index = (++t).ToString();
                 }
 
-                Console.WriteLine("Index value: " + index);
+                Console.WriteLine($"Index value: {index}");
 
                 var provider = new WIMInstallProviderInterface(wimstream, index);
 
@@ -112,40 +112,28 @@ namespace WindowsBuildIdentifier
                 {
                     report.Sku = image.FLAGS;
 
-                    report.Type = null;
+                    report.Type = new HashSet<IdentifyWindowsInstall.Type>();
 
-                    if ((report.Sku.ToLower().Contains("server") && report.Sku.ToLower().EndsWith("hyperv")) ||
-                    (report.Sku.ToLower().Contains("server") && report.Sku.ToLower().EndsWith("v")))
+                    if ((report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase)) ||
+                    (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("v", StringComparison.InvariantCultureIgnoreCase)))
                     {
-                        if (report.Type == null)
+                        if (!report.Type.Contains(IdentifyWindowsInstall.Type.ServerV))
                         {
-                            report.Type = new IdentifyWindowsInstall.Type[] { IdentifyWindowsInstall.Type.ServerV };
-                        }
-                        else if (!report.Type.Any(x => x == IdentifyWindowsInstall.Type.ServerV))
-                        {
-                            report.Type = report.Type.Append(IdentifyWindowsInstall.Type.ServerV).ToArray();
+                            report.Type.Add(IdentifyWindowsInstall.Type.ServerV);
                         }
                     }
-                    else if (report.Sku.ToLower().Contains("server"))
+                    else if (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase))
                     {
-                        if (report.Type == null)
+                        if (!report.Type.Contains(IdentifyWindowsInstall.Type.Server))
                         {
-                            report.Type = new IdentifyWindowsInstall.Type[] { IdentifyWindowsInstall.Type.Server };
-                        }
-                        else if (!report.Type.Any(x => x == IdentifyWindowsInstall.Type.Server))
-                        {
-                            report.Type = report.Type.Append(IdentifyWindowsInstall.Type.Server).ToArray();
+                            report.Type.Add(IdentifyWindowsInstall.Type.Server);
                         }
                     }
                     else
                     {
-                        if (report.Type == null)
+                        if (!report.Type.Contains(IdentifyWindowsInstall.Type.Client))
                         {
-                            report.Type = new IdentifyWindowsInstall.Type[] { IdentifyWindowsInstall.Type.Client };
-                        }
-                        else if (!report.Type.Any(x => x == IdentifyWindowsInstall.Type.Client))
-                        {
-                            report.Type = report.Type.Append(IdentifyWindowsInstall.Type.Client).ToArray();
+                            report.Type.Add(IdentifyWindowsInstall.Type.Client);
                         }
                     }
                 }
@@ -156,15 +144,13 @@ namespace WindowsBuildIdentifier
             wimstream.Dispose();
         }
 
-        static void IdentifyVHD(string vhdpath)
+        private static void IdentifyVHD(string vhdpath)
         {
-            using (FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read))
-            {
-                VHDInstallProviderInterface provider = new VHDInstallProviderInterface(vhdStream);
+            using FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read);
+            VHDInstallProviderInterface provider = new VHDInstallProviderInterface(vhdStream);
 
-                var report = IdentifyWindowsInstall.IdentifyWindows(provider);
-                IdentifyWindowsInstall.DisplayReport(report);
-            }
+            var report = IdentifyWindowsInstall.IdentifyWindows(provider);
+            IdentifyWindowsInstall.DisplayReport(report);
         }
 
         static void Main(string[] args)
@@ -205,63 +191,61 @@ namespace WindowsBuildIdentifier
                 Console.WriteLine(isopath);
                 try
                 {
-                    using (FileStream isoStream = File.Open(isopath, FileMode.Open, FileAccess.Read))
+                    using FileStream isoStream = File.Open(isopath, FileMode.Open, FileAccess.Read);
+
+                    VfsFileSystemFacade cd = new CDReader(isoStream, true);
+                    if (cd.FileExists(@"README.TXT"))
                     {
-                        VfsFileSystemFacade cd = new CDReader(isoStream, true);
+                        cd = new UdfReader(isoStream);
+                    }
 
-                        if (cd.FileExists(@"README.TXT"))
+                    //
+                    // WIM Setup
+                    //
+                    if (cd.FileExists(@"sources\install.wim"))
+                    {
+                        try
                         {
-                            cd = new UdfReader(isoStream);
+                            ExtractWIMXml(cd.OpenFile(@"sources\install.wim", FileMode.Open, FileAccess.Read));
+                            //
+                            // If this succeeds we are processing a properly supported final (or near final)
+                            // WIM file format, so we use the adequate function to handle it.
+                            //
+                            IdentifyWIMSetup(cd.OpenFile(@"sources\install.wim", FileMode.Open, FileAccess.Read));
                         }
+                        catch (UnsupportedWIMException)
+                        {
+                            //
+                            // If this fails we are processing an early
+                            // WIM file format, so we use the adequate function to handle it.
+                            //
+                            Console.WriteLine("Early WIM Format TODO");
+                        }
+                    }
+                    else if (cd.FileExists(@"sources\install.esd"))
+                    {
+                        try
+                        {
+                            ExtractWIMXml(cd.OpenFile(@"sources\install.esd", FileMode.Open, FileAccess.Read));
 
-                        //
-                        // WIM Setup
-                        //
-                        if (cd.FileExists(@"sources\install.wim"))
-                        {
-                            try
-                            {
-                                ExtractWIMXml(cd.OpenFile(@"sources\install.wim", FileMode.Open));
-                                //
-                                // If this succeeds we are processing a properly supported final (or near final)
-                                // WIM file format, so we use the adequate function to handle it.
-                                //
-                                IdentifyWIMSetup(cd.OpenFile(@"sources\install.wim", FileMode.Open, FileAccess.Read));
-                            }
-                            catch (UnsupportedWIMException)
-                            {
-                                //
-                                // If this fails we are processing an early
-                                // WIM file format, so we use the adequate function to handle it.
-                                //
-                                Console.WriteLine("Early WIM Format TODO");
-                            }
+                            //
+                            // If this succeeds we are processing a properly supported final (or near final)
+                            // WIM file format, so we use the adequate function to handle it.
+                            //
+                            IdentifyWIMSetup(cd.OpenFile(@"sources\install.esd", FileMode.Open, FileAccess.Read));
                         }
-                        else if (cd.FileExists(@"sources\install.esd"))
+                        catch (UnsupportedWIMException)
                         {
-                            try
-                            {
-                                ExtractWIMXml(cd.OpenFile(@"sources\install.esd", FileMode.Open));
-
-                                //
-                                // If this succeeds we are processing a properly supported final (or near final)
-                                // WIM file format, so we use the adequate function to handle it.
-                                //
-                                IdentifyWIMSetup(cd.OpenFile(@"sources\install.esd", FileMode.Open, FileAccess.Read));
-                            }
-                            catch (UnsupportedWIMException)
-                            {
-                                //
-                                // If this fails we are processing an early
-                                // WIM file format, so we use the adequate function to handle it.
-                                //
-                                Console.WriteLine("Early WIM Format TODO");
-                            }
+                            //
+                            // If this fails we are processing an early
+                            // WIM file format, so we use the adequate function to handle it.
+                            //
+                            Console.WriteLine("Early WIM Format TODO");
                         }
-                        else
-                        {
-                            Console.WriteLine("No idea");
-                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("No idea");
                     }
                 }
                 catch (Exception ex)
@@ -272,14 +256,20 @@ namespace WindowsBuildIdentifier
             }
 
             Console.WriteLine("Done.");
-            Console.ReadLine();
+
+#if DEBUG
+            if (Debugger.IsAttached)
+            {
+                Console.ReadLine();
+            }
+#endif
         }
 
-        class UnsupportedWIMException : Exception { }
+        private class UnsupportedWIMException : Exception { }
 
-        class UnsupportedWIMXmlException : Exception { }
+        private class UnsupportedWIMXmlException : Exception { }
 
-        static string ExtractWIMXml(Stream wimstream)
+        private static string ExtractWIMXml(Stream wimstream)
         {
             try
             {
@@ -289,12 +279,13 @@ namespace WindowsBuildIdentifier
                     {
                         Entry wimXmlEntry = archiveFile.Entries.First(x => x.FileName == "[1].xml");
 
-                        MemoryStream memoryStream = new MemoryStream();
-                        wimXmlEntry.Extract(memoryStream);
+                        string xml;
+                        using (MemoryStream memoryStream = new MemoryStream())
+                        {
+                            wimXmlEntry.Extract(memoryStream);
 
-                        string xml = Encoding.Unicode.GetString(memoryStream.ToArray(), 2, (int)memoryStream.Length - 2);
-
-                        memoryStream.Dispose();
+                            xml = Encoding.Unicode.GetString(memoryStream.ToArray(), 2, (int)memoryStream.Length - 2);
+                        }
 
                         return xml;
                     }
@@ -312,7 +303,7 @@ namespace WindowsBuildIdentifier
             }
         }
 
-        static XmlFormats.WIMXml.WIM GetWIMClassFromXml(string xml)
+        private static XmlFormats.WIMXml.WIM GetWIMClassFromXml(string xml)
         {
             try
             {
@@ -320,10 +311,8 @@ namespace WindowsBuildIdentifier
                 XmlFormats.WIMXml.WIM wim;
                 using (StringReader stream = new StringReader(xml))
                 {
-                    using (XmlReader reader = XmlReader.Create(stream))
-                    {
-                        wim = (XmlFormats.WIMXml.WIM)ser.Deserialize(reader);
-                    }
+                    using XmlReader reader = XmlReader.Create(stream);
+                    wim = (XmlFormats.WIMXml.WIM)ser.Deserialize(reader);
                 }
                 return wim;
             }
