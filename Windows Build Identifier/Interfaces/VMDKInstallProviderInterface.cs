@@ -7,14 +7,14 @@ namespace WindowsBuildIdentifier.Interfaces
 {
     public class VMDKInstallProviderInterface : WindowsInstallProviderInterface
     {
-        private readonly Stream _vhdstream;
+        private readonly string _vhdpath;
         private readonly Disk _vhd;
         private readonly NtfsFileSystem _ntfs;
 
-        public VMDKInstallProviderInterface(Stream vhdstream)
+        public VMDKInstallProviderInterface(string vhdpath)
         {
-            _vhdstream = vhdstream;
-            _vhd = new Disk(_vhdstream, DiscUtils.Streams.Ownership.Dispose);
+            _vhdpath = vhdpath;
+            _vhd = new Disk(vhdpath, FileAccess.Read);
 
             PartitionInfo part = null;
             foreach (var partition in _vhd.Partitions.Partitions)

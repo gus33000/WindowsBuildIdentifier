@@ -194,9 +194,9 @@ namespace WindowsBuildIdentifier.Identification
             Common.DisplayReport(report);
         }
 
-        private static void IdentifyWindowsNTFromVMDK(Stream vhdstream)
+        private static void IdentifyWindowsNTFromVMDK(string vhdpath)
         {
-            VMDKInstallProviderInterface provider = new VMDKInstallProviderInterface(vhdstream);
+            VMDKInstallProviderInterface provider = new VMDKInstallProviderInterface(vhdpath);
 
             var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
             Common.DisplayReport(report);
@@ -297,12 +297,15 @@ namespace WindowsBuildIdentifier.Identification
         public static void IdentifyWindowsFromVMDK(string vhdpath)
         {
             Console.WriteLine();
-            Console.WriteLine("Opening VHD File");
+            Console.WriteLine("Opening VMDK File");
             Console.WriteLine(vhdpath);
             try
             {
-                using FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read);
-                IdentifyWindowsNTFromVMDK(vhdStream);
+                IdentifyWindowsNTFromVMDK(vhdpath);
+            }
+            catch (NullReferenceException)
+            {
+                Console.WriteLine("Fail, this image is most likely a differential image. Skipping.");
             }
             catch (Exception ex)
             {
