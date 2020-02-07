@@ -35,12 +35,12 @@ namespace WindowsBuildIdentifier
 {
     class Program
     {
-        static void IdentifyWIMSetup(VfsFileSystemFacade cd, string wimpath)
+        static void IdentifyWIMSetup(Stream wimstream)
         {
             Console.WriteLine();
 
             Console.WriteLine("Gathering WIM information XML file");
-            string xml = ExtractWIMXml(cd.OpenFile(wimpath, FileMode.Open));
+            string xml = ExtractWIMXml(wimstream);
 
             Console.WriteLine("Parsing WIM information XML file");
             XmlFormats.WIMXml.WIM wim = GetWIMClassFromXml(xml);
@@ -85,8 +85,7 @@ namespace WindowsBuildIdentifier
 
                 if (index != null && wim.IMAGE[0].INDEX == "0")
                 {
-                    var tmpwim = cd.OpenFile(wimpath, FileMode.Open);
-                    using (ArchiveFile archiveFile = new ArchiveFile(cd.OpenFile(wimpath, FileMode.Open), SevenZipFormat.Wim))
+                    using (ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim))
                     {
                         if (!archiveFile.Entries.Any(x => x.FileName.StartsWith("0\\")))
                         {
@@ -103,7 +102,7 @@ namespace WindowsBuildIdentifier
 
                 Console.WriteLine("Index value: " + index);
 
-                var provider = new WIMInstallProviderInterface(cd.OpenFile(wimpath, FileMode.Open), index);
+                var provider = new WIMInstallProviderInterface(wimstream, index);
 
                 var report = IdentifyWindowsInstall.IdentifyWindows(provider);
 
@@ -153,11 +152,13 @@ namespace WindowsBuildIdentifier
 
                 IdentifyWindowsInstall.DisplayReport(report);
             }
+
+            wimstream.Dispose();
         }
 
         static void IdentifyVHD(string vhdpath)
         {
-            using (FileStream vhdStream = File.Open(vhdpath, FileMode.Open))
+            using (FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read))
             {
                 VHDInstallProviderInterface provider = new VHDInstallProviderInterface(vhdStream);
 
@@ -204,8 +205,7 @@ namespace WindowsBuildIdentifier
                 Console.WriteLine(isopath);
                 try
                 {
-
-                    using (FileStream isoStream = File.Open(isopath, FileMode.Open))
+                    using (FileStream isoStream = File.Open(isopath, FileMode.Open, FileAccess.Read))
                     {
                         VfsFileSystemFacade cd = new CDReader(isoStream, true);
 
@@ -226,7 +226,7 @@ namespace WindowsBuildIdentifier
                                 // If this succeeds we are processing a properly supported final (or near final)
                                 // WIM file format, so we use the adequate function to handle it.
                                 //
-                                IdentifyWIMSetup(cd, @"sources\install.wim");
+                                IdentifyWIMSetup(cd.OpenFile(@"sources\install.wim", FileMode.Open, FileAccess.Read));
                             }
                             catch (UnsupportedWIMException)
                             {
@@ -247,7 +247,7 @@ namespace WindowsBuildIdentifier
                                 // If this succeeds we are processing a properly supported final (or near final)
                                 // WIM file format, so we use the adequate function to handle it.
                                 //
-                                IdentifyWIMSetup(cd, @"sources\install.esd");
+                                IdentifyWIMSetup(cd.OpenFile(@"sources\install.esd", FileMode.Open, FileAccess.Read));
                             }
                             catch (UnsupportedWIMException)
                             {

@@ -123,7 +123,54 @@ namespace WindowsBuildIdentifier
         {
             Report report = new Report();
 
-            bool IsUnstaged = installProvider.GetFileSystemEntries().Any(x => x.ToLower().Contains(@"build\filerepository\"));
+            var fileentries = installProvider.GetFileSystemEntries();
+
+            bool IsUnstaged = !fileentries.Any(x => x.ToLower().Contains(@"windows\explorer.exe"));
+
+            //
+            // We need a few files from the install to gather enough information
+            // These files are:
+            //
+            // - \ntkrnlmp.exe
+            // or \ntoskrnl.exe
+            // - windows\system32\config\software
+            // - windows\system32\config\system
+            //
+
+            string kernelPath = "";
+            string softwareHivePath = "";
+            string systemHivePath = "";
+
+            if (fileentries.Any(x => x.ToLower().EndsWith(@"\ntkrnlmp.exe")))
+            {
+                var entry = fileentries.First(x => x.ToLower().EndsWith(@"\ntkrnlmp.exe"));
+                kernelPath = installProvider.ExpandFile(entry);
+            }
+            else if (fileentries.Any(x => x.ToLower().EndsWith(@"\ntoskrnl.exe")))
+            {
+                var entry = fileentries.First(x => x.ToLower().EndsWith(@"\ntoskrnl.exe"));
+                kernelPath = installProvider.ExpandFile(entry);
+            }
+
+            if (fileentries.Any(x => x.ToLower() == @"windows\system32\config\software"))
+            {
+                var entry = fileentries.First(x => x.ToLower() == @"windows\system32\config\software");
+                softwareHivePath = installProvider.ExpandFile(entry);
+            }
+
+            if (fileentries.Any(x => x.ToLower() == @"windows\system32\config\system"))
+            {
+                var entry = fileentries.First(x => x.ToLower() == @"windows\system32\config\system");
+                systemHivePath = installProvider.ExpandFile(entry);
+            }
+
+            Console.WriteLine("Extracting version information from the image 1");
+            VersionInfo1 info = ExtractVersionInfo(kernelPath);
+
+            File.Delete(kernelPath);
+
+            report.Architecture = info.Architecture;
+            report.BuildType = info.BuildType;
 
             if (IsUnstaged)
             {
@@ -134,44 +181,50 @@ namespace WindowsBuildIdentifier
                 // parse editions
                 report.Editions = GatherUnstagedEditions(installProvider);
             }
-
-            if (string.IsNullOrEmpty(report.Sku))
+            else
             {
                 Console.WriteLine("Extracting additional edition information");
-                report.Sku = ExtractEditionInfo(installProvider);
+                report.Sku = ExtractEditionInfo(systemHivePath);
             }
-
-            Console.WriteLine("Extracting version information from the image 1");
-            VersionInfo1 info = ExtractVersionInfo(installProvider);
 
             Console.WriteLine("Extracting version information from the image 2");
-            VersionInfo2 info2 = ExtractVersionInfo2(installProvider);
+            VersionInfo2 info2 = ExtractVersionInfo2(softwareHivePath, systemHivePath);
 
-            report.MajorVersion = info.MajorVersion;
-            report.MinorVersion = info.MinorVersion;
-            report.BuildNumber = info.BuildNumber;
-            report.DeltaVersion = info.DeltaVersion;
-            report.BranchName = info.BranchName;
-            report.CompileDate = info.CompileDate;
-            report.Architecture = info.Architecture;
-            report.BuildType = info.BuildType;
-
-            if (string.IsNullOrEmpty(info.BranchName) ||
-                string.IsNullOrEmpty(info.CompileDate) ||
-                info.BuildNumber < info2.BuildNumber ||
-                info.BuildNumber == info2.BuildNumber && info.DeltaVersion < info2.DeltaVersion)
-            {
-                report.MajorVersion = info2.MajorVersion;
-                report.MinorVersion = info2.MinorVersion;
-                report.BuildNumber = info2.BuildNumber;
-                report.DeltaVersion = info2.DeltaVersion;
-                report.BranchName = info2.BranchName;
-                report.CompileDate = info2.CompileDate;
-            }
+            File.Delete(softwareHivePath);
+            File.Delete(systemHivePath);
 
             report.Tag = info2.Tag;
             report.Licensing = info2.Licensing;
             report.LanguageCodes = info2.LanguageCodes;
+
+            WindowsVersion version1 = new WindowsVersion
+            {
+                MajorVersion = info.MajorVersion,
+                MinorVersion = info.MinorVersion,
+                BuildNumber = info.BuildNumber,
+                DeltaVersion = info.DeltaVersion,
+                BranchName = info.BranchName,
+                CompileDate = info.CompileDate
+            };
+
+            WindowsVersion version2 = new WindowsVersion
+            {
+                MajorVersion = info2.MajorVersion,
+                MinorVersion = info2.MinorVersion,
+                BuildNumber = info2.BuildNumber,
+                DeltaVersion = info2.DeltaVersion,
+                BranchName = info2.BranchName,
+                CompileDate = info2.CompileDate
+            };
+
+            WindowsVersion correctVersion = GetGreaterVersion(version1, version2);
+
+            report.MajorVersion = correctVersion.MajorVersion;
+            report.MinorVersion = correctVersion.MinorVersion;
+            report.BuildNumber = correctVersion.BuildNumber;
+            report.DeltaVersion = correctVersion.DeltaVersion;
+            report.BranchName = correctVersion.BranchName;
+            report.CompileDate = correctVersion.CompileDate;
 
             if (report.BuildNumber > 2195)
             {
@@ -356,126 +409,112 @@ namespace WindowsBuildIdentifier
             return verinfo;
         }
 
-        private static VersionInfo1 ExtractVersionInfo(WindowsInstallProviderInterface installProvider)
+        private static VersionInfo1 ExtractVersionInfo(string kernelPath)
         {
             VersionInfo1 result = new VersionInfo1();
 
-            if (installProvider.GetFileSystemEntries().Any(x => x.ToLower().EndsWith(@"\ntkrnlmp.exe")))
-            {
-                string tmp = installProvider.ExpandFile(installProvider.GetFileSystemEntries().First(x => x.ToLower().EndsWith(@"\ntkrnlmp.exe")));
+            FileVersionInfo info = FileVersionInfo.GetVersionInfo(kernelPath);
 
-                FileVersionInfo info = FileVersionInfo.GetVersionInfo(tmp);
+            result.Architecture = GetMachineTypeFromFile(new FileStream(kernelPath, FileMode.Open));
 
-                result.Architecture = GetMachineTypeFromFile(new FileStream(tmp, FileMode.Open));
-
-                File.Delete(tmp);
-
-                result = ParseBuildString(result, info.FileVersion);
-                result.BuildType = info.IsDebug ? BuildType.chk : BuildType.fre;
-            }
-            else if (installProvider.GetFileSystemEntries().Any(x => x.ToLower().EndsWith(@"\ntoskrnl.exe")))
-            {
-                string tmp = installProvider.ExpandFile(installProvider.GetFileSystemEntries().First(x => x.ToLower().EndsWith(@"\ntoskrnl.exe")));
-
-                FileVersionInfo info = FileVersionInfo.GetVersionInfo(tmp);
-                result.Architecture = GetMachineTypeFromFile(new FileStream(tmp, FileMode.Open));
-
-                File.Delete(tmp);
-
-                result = ParseBuildString(result, info.FileVersion);
-                result.BuildType = info.IsDebug ? BuildType.chk : BuildType.fre;
-            }
+            result = ParseBuildString(result, info.FileVersion);
+            result.BuildType = info.IsDebug ? BuildType.chk : BuildType.fre;
 
             return result;
         }
 
-        private static VersionInfo2 ExtractVersionInfo2(WindowsInstallProviderInterface installProvider)
+        private class WindowsVersion
+        {
+            public ulong MajorVersion;
+            public ulong MinorVersion;
+            public ulong BuildNumber;
+            public ulong DeltaVersion;
+            public string BranchName;
+            public string CompileDate;
+        }
+
+        private static VersionInfo2 ExtractVersionInfo2(string softwareHivePath, string systemHivePath)
         {
             VersionInfo2 result = new VersionInfo2();
 
-            if (installProvider.GetFileSystemEntries().Any(x => x.ToLower() == @"windows\system32\config\software"))
+            using (var hiveStream = new FileStream(softwareHivePath, FileMode.Open, FileAccess.Read))
+            using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
             {
-                string tmp = installProvider.ExpandFile(installProvider.GetFileSystemEntries().First(x => x.ToLower() == @"windows\system32\config\software"));
-
-                var hiveStream = new FileStream(tmp, FileMode.Open);
-                DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream);
-
-                DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
-
-                string buildLab = (string)subkey.GetValue("BuildLab");
-                string buildLabEx = (string)subkey.GetValue("BuildLabEx");
-
-                string releaseId = (string)subkey.GetValue("ReleaseId");
-
-                int? UBR = (int?)subkey.GetValue("UBR");
-                int? Major = (int?)subkey.GetValue("CurrentMajorVersionNumber");
-                int? Minor = (int?)subkey.GetValue("CurrentMinorVersionNumber");
-
-                string productId = "";
-
-                subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion\DefaultProductKey");
-                if (subkey != null)
+                try
                 {
-                    productId = (string)subkey.GetValue("ProductId");
+                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
+
+                    string buildLab = (string)subkey.GetValue("BuildLab");
+                    string buildLabEx = (string)subkey.GetValue("BuildLabEx");
+
+                    string releaseId = (string)subkey.GetValue("ReleaseId");
+
+                    int? UBR = (int?)subkey.GetValue("UBR");
+                    int? Major = (int?)subkey.GetValue("CurrentMajorVersionNumber");
+                    int? Minor = (int?)subkey.GetValue("CurrentMinorVersionNumber");
+
+                    if (!string.IsNullOrEmpty(buildLab) && buildLab.Count(x => x == '.') == 2)
+                    {
+                        var splitLab = buildLab.Split('.');
+
+                        result.BranchName = splitLab[1];
+                        result.CompileDate = splitLab[2];
+                        result.BuildNumber = ulong.Parse(splitLab[0]);
+                    }
+
+                    if (!string.IsNullOrEmpty(buildLabEx) && buildLabEx.Count(x => x == '.') == 4)
+                    {
+                        var splitLabEx = buildLabEx.Split('.');
+
+                        result.BranchName = splitLabEx[3];
+                        result.CompileDate = splitLabEx[4];
+                        result.DeltaVersion = ulong.Parse(splitLabEx[1]);
+                        result.BuildNumber = ulong.Parse(splitLabEx[0]);
+                    }
+
+                    if (UBR.HasValue)
+                        result.DeltaVersion = (ulong)UBR.Value;
+                    if (Major.HasValue)
+                        result.MajorVersion = (ulong)Major.Value;
+                    if (Minor.HasValue)
+                        result.MinorVersion = (ulong)Minor.Value;
+
+                    if (!string.IsNullOrEmpty(releaseId))
+                    {
+                        result.Tag = releaseId;
+                    }
                 }
-                else
+                catch { };
+
+                try
                 {
-                    subkey = hive.Root.OpenSubKey(@"Microsoft\Windows\CurrentVersion");
+                    string productId = "";
+
+                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion\DefaultProductKey");
                     if (subkey != null)
                     {
                         productId = (string)subkey.GetValue("ProductId");
                     }
+                    else
+                    {
+                        subkey = hive.Root.OpenSubKey(@"Microsoft\Windows\CurrentVersion");
+                        if (subkey != null)
+                        {
+                            productId = (string)subkey.GetValue("ProductId");
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(productId))
+                    {
+                        result.Licensing = productId.Contains("OEM") ? Licensing.OEM : Licensing.Retail;
+                    }
                 }
-
-                if (!string.IsNullOrEmpty(buildLab) && buildLab.Count(x => x == '.') == 2)
-                {
-                    var splitLab = buildLab.Split('.');
-
-                    result.BranchName = splitLab[1];
-                    result.CompileDate = splitLab[2];
-                    result.BuildNumber = ulong.Parse(splitLab[0]);
-                }
-
-                if (!string.IsNullOrEmpty(buildLabEx) && buildLabEx.Count(x => x == '.') == 4)
-                {
-                    var splitLabEx = buildLabEx.Split('.');
-
-                    result.BranchName = splitLabEx[3];
-                    result.CompileDate = splitLabEx[4];
-                    result.DeltaVersion = ulong.Parse(splitLabEx[1]);
-                    result.BuildNumber = ulong.Parse(splitLabEx[0]);
-                }
-
-                if (UBR.HasValue)
-                    result.DeltaVersion = (ulong)UBR.Value;
-                if (Major.HasValue)
-                    result.MajorVersion = (ulong)Major.Value;
-                if (Minor.HasValue)
-                    result.MinorVersion = (ulong)Minor.Value;
-
-                if (!string.IsNullOrEmpty(releaseId))
-                {
-                    result.Tag = releaseId;
-                }
-
-                if (!string.IsNullOrEmpty(productId))
-                {
-                    result.Licensing = productId.Contains("OEM") ? Licensing.OEM : Licensing.Retail;
-                }
-
-                hive.Dispose();
-                hiveStream.Dispose();
-
-                File.Delete(tmp);
+                catch { };
             }
 
-            if (installProvider.GetFileSystemEntries().Any(x => x.ToLower() == @"windows\system32\config\system"))
+            using (var hiveStream = new FileStream(systemHivePath, FileMode.Open, FileAccess.Read))
+            using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
             {
-                string tmp = installProvider.ExpandFile(installProvider.GetFileSystemEntries().First(x => x.ToLower() == @"windows\system32\config\system"));
-
-                var hiveStream = new FileStream(tmp, FileMode.Open);
-                DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream);
-
                 try
                 {
                     DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\MUI\UILanguages");
@@ -510,26 +549,84 @@ namespace WindowsBuildIdentifier
                     }
                 }
                 catch { };
-
-                hive.Dispose();
-                hiveStream.Dispose();
-
-                File.Delete(tmp);
             }
+
             return result;
         }
 
-        private static string ExtractEditionInfo(WindowsInstallProviderInterface installProvider)
+        private static WindowsVersion GetGreaterVersion(WindowsVersion version1, WindowsVersion version2)
+        {
+            if (version1.MajorVersion != version2.MajorVersion)
+            {
+                if (version1.MajorVersion > version2.MajorVersion)
+                {
+                    return version1;
+                }
+                return version2;
+            }
+
+            if (version1.MinorVersion != version2.MinorVersion)
+            {
+                if (version1.MinorVersion > version2.MinorVersion)
+                {
+                    return version1;
+                }
+                return version2;
+            }
+
+            if (version1.BuildNumber != version2.BuildNumber)
+            {
+                if (version1.BuildNumber > version2.BuildNumber)
+                {
+                    return version1;
+                }
+                return version2;
+            }
+
+            if (version1.DeltaVersion != version2.DeltaVersion)
+            {
+                if (version1.DeltaVersion > version2.DeltaVersion)
+                {
+                    return version1;
+                }
+                return version2;
+            }
+
+            if (version1.CompileDate != version2.CompileDate)
+            {
+                if (string.IsNullOrEmpty(version1.CompileDate))
+                {
+                    return version2;
+                }
+                if (string.IsNullOrEmpty(version2.CompileDate))
+                {
+                    return version1;
+                }
+
+                CultureInfo provider = CultureInfo.InvariantCulture;
+
+                string format = "yyMMDD-HHmm";
+
+                DateTime date1 = DateTime.ParseExact(version1.CompileDate, format, provider);
+                DateTime date2 = DateTime.ParseExact(version2.CompileDate, format, provider);
+
+                if (date1 > date2)
+                {
+                    return version1;
+                }
+                return version2;
+            }
+
+            return version1;
+        }
+
+        private static string ExtractEditionInfo(string systemHivePath)
         {
             string result = "";
 
-            if (installProvider.GetFileSystemEntries().Any(x => x.ToLower() == @"windows\system32\config\system"))
+            using (var hiveStream = new FileStream(systemHivePath, FileMode.Open, FileAccess.Read))
+            using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
             {
-                string tmp = installProvider.ExpandFile(installProvider.GetFileSystemEntries().First(x => x.ToLower() == @"windows\system32\config\system"));
-
-                var hiveStream = new FileStream(tmp, FileMode.Open);
-                DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream);
-
                 try
                 {
                     DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
@@ -587,12 +684,8 @@ namespace WindowsBuildIdentifier
                     }
                 }
                 catch { };
-
-                hive.Dispose();
-                hiveStream.Dispose();
-
-                File.Delete(tmp);
             }
+
             return result;
         }
 

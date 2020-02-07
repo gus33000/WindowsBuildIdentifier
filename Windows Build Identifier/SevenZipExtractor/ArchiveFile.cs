@@ -414,7 +414,8 @@ namespace SevenZipExtractor
         {
             if (this.archiveStream != null)
             {
-                this.archiveStream.Dispose();
+                //this.archiveStream.Dispose();
+                this.archiveStream.Seek(0, 0, IntPtr.Zero);
             }
 
             if (this.archive != null)
