@@ -10,7 +10,9 @@ namespace SevenZipExtractor
     {
         private SevenZipHandle sevenZipHandle;
         private readonly IInArchive archive;
+#pragma warning disable CA2213 // Disposable fields should be disposed
         private readonly InStreamWrapper archiveStream;
+#pragma warning restore CA2213 // Disposable fields should be disposed
         private IList<Entry> entries;
 
         private string libraryFilePath;
@@ -410,7 +412,9 @@ namespace SevenZipExtractor
             this.Dispose(false);
         }
 
+#pragma warning disable CA1063 // Implement IDisposable Correctly
         protected void Dispose(bool disposing)
+#pragma warning restore CA1063 // Implement IDisposable Correctly
         {
             if (this.archiveStream != null)
             {
