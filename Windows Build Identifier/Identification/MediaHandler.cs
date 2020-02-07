@@ -186,6 +186,30 @@ namespace WindowsBuildIdentifier.Identification
             Common.DisplayReport(report);
         }
 
+        private static void IdentifyWindowsNTFromVDI(Stream vhdstream)
+        {
+            VDIInstallProviderInterface provider = new VDIInstallProviderInterface(vhdstream);
+
+            var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+            Common.DisplayReport(report);
+        }
+
+        private static void IdentifyWindowsNTFromVMDK(Stream vhdstream)
+        {
+            VMDKInstallProviderInterface provider = new VMDKInstallProviderInterface(vhdstream);
+
+            var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+            Common.DisplayReport(report);
+        }
+
+        private static void IdentifyWindowsNTFromVHDX(Stream vhdstream)
+        {
+            VHDXInstallProviderInterface provider = new VHDXInstallProviderInterface(vhdstream);
+
+            var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+            Common.DisplayReport(report);
+        }
+
         public static void IdentifyWindowsFromISO(string isopath)
         {
             Console.WriteLine();
@@ -263,6 +287,54 @@ namespace WindowsBuildIdentifier.Identification
             {
                 using FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read);
                 IdentifyWindowsNTFromVHD(vhdStream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Fail");
+                Console.WriteLine(ex.ToString());
+            }
+        }
+        public static void IdentifyWindowsFromVMDK(string vhdpath)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Opening VHD File");
+            Console.WriteLine(vhdpath);
+            try
+            {
+                using FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read);
+                IdentifyWindowsNTFromVMDK(vhdStream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Fail");
+                Console.WriteLine(ex.ToString());
+            }
+        }
+        public static void IdentifyWindowsFromVHDX(string vhdpath)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Opening VHDX File");
+            Console.WriteLine(vhdpath);
+            try
+            {
+                using FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read);
+                IdentifyWindowsNTFromVHDX(vhdStream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Fail");
+                Console.WriteLine(ex.ToString());
+            }
+        }
+        public static void IdentifyWindowsFromVDI(string vhdpath)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Opening VDI File");
+            Console.WriteLine(vhdpath);
+            try
+            {
+                using FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read);
+                IdentifyWindowsNTFromVDI(vhdStream);
             }
             catch (Exception ex)
             {

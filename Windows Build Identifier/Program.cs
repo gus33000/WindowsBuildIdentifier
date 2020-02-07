@@ -62,6 +62,21 @@ namespace WindowsBuildIdentifier
                 Identification.MediaHandler.IdentifyWindowsFromVHD(vhdpath);
             }
 
+            foreach (var vhdpath in Directory.GetFiles(args[0], "*.vhdx", SearchOption.AllDirectories))
+            {
+                Identification.MediaHandler.IdentifyWindowsFromVHDX(vhdpath);
+            }
+
+            foreach (var vhdpath in Directory.GetFiles(args[0], "*.vmdk", SearchOption.AllDirectories))
+            {
+                Identification.MediaHandler.IdentifyWindowsFromVMDK(vhdpath);
+            }
+
+            foreach (var vhdpath in Directory.GetFiles(args[0], "*.vdi", SearchOption.AllDirectories))
+            {
+                Identification.MediaHandler.IdentifyWindowsFromVDI(vhdpath);
+            }
+
             Console.WriteLine("Done.");
 
 #if DEBUG
