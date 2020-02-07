@@ -126,8 +126,6 @@ namespace WindowsBuildIdentifier
 
             var fileentries = installProvider.GetFileSystemEntries();
 
-            bool IsUnstaged = !fileentries.Any(x => x.Contains(@"windows\explorer.exe", StringComparison.InvariantCultureIgnoreCase));
-
             //
             // We need a few files from the install to gather enough information
             // These files are:
@@ -160,6 +158,9 @@ namespace WindowsBuildIdentifier
             {
                 systemHivePath = installProvider.ExpandFile(systemHiveEntry);
             }
+
+            bool IsUnstaged = !fileentries.Any(x => x.Contains(@"system32\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase)) &&
+                !fileentries.Any(x => x.Contains(@"system32\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase));
 
             Console.WriteLine("Extracting version information from the image 1");
             VersionInfo1 info = ExtractVersionInfo(kernelPath);
