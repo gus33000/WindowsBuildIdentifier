@@ -32,8 +32,8 @@ namespace WindowsBuildIdentifier
         {
             Console.WriteLine();
             Console.WriteLine("Release Identifier Tool");
-            Console.WriteLine("TBD Release Database Indexing Toolset");
-            Console.WriteLine("TBD (c) 2008-2020");
+            Console.WriteLine("BetaArchive Release Database Indexing Toolset");
+            Console.WriteLine("BetaArchive (c) 2008-2020");
             Console.WriteLine("Gustave Monce (@gus33000) (c) 2009-2020");
             Console.WriteLine();
 
