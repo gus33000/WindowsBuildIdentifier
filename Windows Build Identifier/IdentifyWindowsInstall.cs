@@ -496,7 +496,7 @@ namespace WindowsBuildIdentifier
                     {
                         var name = cultures.First(x => x.LCID == int.Parse(langid, NumberStyles.HexNumber, CultureInfo.CurrentCulture)).Name;
                         if (result.LanguageCodes == null ||
-                            result.LanguageCodes != null && result.LanguageCodes.Any(x => x.ToLower() == name.ToLower()))
+                            result.LanguageCodes != null && !result.LanguageCodes.Any(x => x.ToLower() == name.ToLower()))
                         {
                             if (result.LanguageCodes == null)
                             {
