@@ -2,9 +2,8 @@
 using DiscUtils.Ntfs;
 using DiscUtils.Partitions;
 using System.IO;
-using System;
 
-namespace WindowsBuildIdentifier
+namespace WindowsBuildIdentifier.Interfaces
 {
     public class VHDInstallProviderInterface : WindowsInstallProviderInterface
     {

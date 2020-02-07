@@ -25,7 +25,7 @@ using System;
 using System.IO;
 using System.Linq;
 
-namespace WindowsBuildIdentifier
+namespace WindowsBuildIdentifier.Interfaces
 {
     public class WIMInstallProviderInterface : WindowsInstallProviderInterface
     {

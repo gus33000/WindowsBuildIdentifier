@@ -20,7 +20,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-namespace WindowsBuildIdentifier
+namespace WindowsBuildIdentifier.Interfaces
 {
     public interface WindowsInstallProviderInterface
     {
