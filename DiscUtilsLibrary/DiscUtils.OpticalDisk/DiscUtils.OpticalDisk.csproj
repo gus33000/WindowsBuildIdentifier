@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../common-library.props" />
+
+  <PropertyGroup>
+    <Description>DiscUtils OpticalDisk</Description>
+    <Authors>Kenneth Bell;LordMike</Authors>
+    <PackageTags>DiscUtils;Optical;OpticalDisk</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DiscUtils.Core\DiscUtils.Core.csproj" />
+    <ProjectReference Include="..\DiscUtils.Iso9660\DiscUtils.Iso9660.csproj" />
+    <ProjectReference Include="..\DiscUtils.Udf\DiscUtils.Udf.csproj" />
+  </ItemGroup>
+
+</Project>

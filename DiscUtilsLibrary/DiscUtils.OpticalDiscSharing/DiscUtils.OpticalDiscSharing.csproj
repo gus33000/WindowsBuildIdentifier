@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../common-library.props" />
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net20;net40;net45</TargetFrameworks>
+    <Description>DiscUtils OpticalDiscSharing</Description>
+    <Authors>Kenneth Bell;LordMike</Authors>
+    <PackageTags>DiscUtils;OpticalDiscSharing</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DiscUtils.Core\DiscUtils.Core.csproj" />
+    <ProjectReference Include="..\DiscUtils.Net\DiscUtils.Net.csproj" />
+  </ItemGroup>
+
+</Project>

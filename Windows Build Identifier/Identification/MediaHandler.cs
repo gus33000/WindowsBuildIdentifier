@@ -21,8 +21,8 @@ namespace WindowsBuildIdentifier.Identification
 
         private static string ExtractWIMXml(Stream wimstream)
         {
-            try
-            {
+            //try
+            //{
                 using (ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim))
                 {
                     if (archiveFile.Entries.Any(x => x.FileName == "[1].xml"))
@@ -46,11 +46,11 @@ namespace WindowsBuildIdentifier.Identification
                 }
 
                 throw new UnsupportedWIMException();
-            }
-            catch (SevenZipException)
+            //}
+            /*catch (SevenZipException)
             {
                 throw new UnsupportedWIMException();
-            }
+            }*/
         }
 
         private static XmlFormats.WIMXml.WIM GetWIMClassFromXml(string xml)
