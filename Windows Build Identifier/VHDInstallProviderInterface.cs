@@ -8,20 +8,22 @@ namespace WindowsBuildIdentifier
 {
     public class VHDInstallProviderInterface : WindowsInstallProviderInterface
     {
-        private Stream _vhdstream;
-        private Disk vhd;
-        private NtfsFileSystem _ntfs;
+        private readonly Stream _vhdstream;
+        private readonly Disk _vhd;
+        private readonly NtfsFileSystem _ntfs;
 
         public VHDInstallProviderInterface(Stream vhdstream)
         {
             _vhdstream = vhdstream;
-            vhd = new Disk(_vhdstream, DiscUtils.Streams.Ownership.Dispose);
-            
+            _vhd = new Disk(_vhdstream, DiscUtils.Streams.Ownership.Dispose);
+
             PartitionInfo part = null;
-            foreach (var partition in vhd.Partitions.Partitions)
+            foreach (var partition in _vhd.Partitions.Partitions)
             {
                 if (part == null)
+                {
                     part = partition;
+                }
                 else
                 {
                     if (partition.SectorCount > part.SectorCount)
@@ -36,7 +38,7 @@ namespace WindowsBuildIdentifier
 
         public void Close()
         {
-            vhd.Dispose();
+            _vhd.Dispose();
         }
 
         public string ExpandFile(string Entry)
@@ -44,10 +46,8 @@ namespace WindowsBuildIdentifier
             var tmp = Path.GetTempFileName();
             using (var srcstrm = _ntfs.OpenFile(Entry, FileMode.Open))
             {
-                using (var dststrm = new FileStream(tmp, FileMode.Append))
-                {
-                    srcstrm.CopyTo(dststrm);
-                }
+                using var dststrm = new FileStream(tmp, FileMode.Append);
+                srcstrm.CopyTo(dststrm);
             }
 
             return tmp;

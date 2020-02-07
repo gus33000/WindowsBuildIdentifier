@@ -1,16 +1,16 @@
 ﻿/*
  * Copyright (c) 2020, Gustave Monce - gus33000.me - @gus33000
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
  * the rights to use, copy, modify, merge, publish, distribute, sublicense,
  * and/or sell copies of the Software, and to permit persons to whom the
  * Software is furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -21,6 +21,7 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -61,7 +62,7 @@ namespace WindowsBuildIdentifier
             public string Tag;
             public MachineType Architecture;
             public BuildType BuildType;
-            public Type[] Type;
+            public HashSet<Type> Type = new HashSet<Type>();
             public string Sku;
             public string[] Editions;
             public Licensing Licensing;
@@ -125,7 +126,7 @@ namespace WindowsBuildIdentifier
 
             var fileentries = installProvider.GetFileSystemEntries();
 
-            bool IsUnstaged = !fileentries.Any(x => x.ToLower().Contains(@"windows\explorer.exe"));
+            bool IsUnstaged = !fileentries.Any(x => x.Contains(@"windows\explorer.exe", StringComparison.InvariantCultureIgnoreCase));
 
             //
             // We need a few files from the install to gather enough information
@@ -141,27 +142,23 @@ namespace WindowsBuildIdentifier
             string softwareHivePath = "";
             string systemHivePath = "";
 
-            if (fileentries.Any(x => x.ToLower().EndsWith(@"\ntkrnlmp.exe")))
+            var kernelEntry = fileentries.FirstOrDefault(x => x.EndsWith(@"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase))
+                ?? fileentries.FirstOrDefault(x => x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase));
+            if (kernelEntry != null)
             {
-                var entry = fileentries.First(x => x.ToLower().EndsWith(@"\ntkrnlmp.exe"));
-                kernelPath = installProvider.ExpandFile(entry);
-            }
-            else if (fileentries.Any(x => x.ToLower().EndsWith(@"\ntoskrnl.exe")))
-            {
-                var entry = fileentries.First(x => x.ToLower().EndsWith(@"\ntoskrnl.exe"));
-                kernelPath = installProvider.ExpandFile(entry);
+                kernelPath = installProvider.ExpandFile(kernelEntry);
             }
 
-            if (fileentries.Any(x => x.ToLower() == @"windows\system32\config\software"))
+            var softwareHiveEntry = fileentries.FirstOrDefault(x => x.Equals(@"windows\system32\config\software", StringComparison.InvariantCultureIgnoreCase));
+            if (softwareHiveEntry != null)
             {
-                var entry = fileentries.First(x => x.ToLower() == @"windows\system32\config\software");
-                softwareHivePath = installProvider.ExpandFile(entry);
+                softwareHivePath = installProvider.ExpandFile(softwareHiveEntry);
             }
 
-            if (fileentries.Any(x => x.ToLower() == @"windows\system32\config\system"))
+            var systemHiveEntry = fileentries.FirstOrDefault(x => x.Equals(@"windows\system32\config\system", StringComparison.InvariantCultureIgnoreCase));
+            if (systemHiveEntry != null)
             {
-                var entry = fileentries.First(x => x.ToLower() == @"windows\system32\config\system");
-                systemHivePath = installProvider.ExpandFile(entry);
+                systemHivePath = installProvider.ExpandFile(systemHiveEntry);
             }
 
             Console.WriteLine("Extracting version information from the image 1");
@@ -228,100 +225,80 @@ namespace WindowsBuildIdentifier
 
             if (report.BuildNumber > 2195)
             {
-                if (report.Sku.ToLower() == "personal")
+                if (report.Sku.Equals("personal", StringComparison.InvariantCultureIgnoreCase))
+                {
                     report.Sku = "Home";
+                }
             }
 
             if (report.BuildNumber >= 1911)
             {
-                if (report.Sku.ToLower() == "workstation")
+                if (report.Sku.Equals("workstation", StringComparison.InvariantCultureIgnoreCase))
+                {
                     report.Sku = "Professional";
+                }
             }
 
             if (IsUnstaged && report.Editions != null)
             {
                 foreach (var skuunstaged in report.Editions)
                 {
-                    if ((skuunstaged.ToLower().Contains("server") && skuunstaged.ToLower().EndsWith("hyperv")) ||
-                        (skuunstaged.ToLower().Contains("server") && skuunstaged.ToLower().EndsWith("v")))
+                    if ((skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase) && skuunstaged.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase)) ||
+                        (skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase) && skuunstaged.EndsWith("v", StringComparison.InvariantCultureIgnoreCase)))
                     {
-                        if (report.Type == null)
+                        if (!report.Type.Contains(Type.ServerV))
                         {
-                            report.Type = new Type[] { Type.ServerV };
-                        }
-                        else if (!report.Type.Any(x => x == Type.ServerV))
-                        {
-                            report.Type = report.Type.Append(Type.ServerV).ToArray();
+                            report.Type.Add(Type.ServerV);
                         }
                     }
-                    else if (skuunstaged.ToLower().Contains("server"))
+                    else if (skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase))
                     {
-                        if (report.Type == null)
+                        if (!report.Type.Contains(Type.Server))
                         {
-                            report.Type = new Type[] { Type.Server };
-                        }
-                        else if (!report.Type.Any(x => x == Type.Server))
-                        {
-                            report.Type = report.Type.Append(Type.Server).ToArray();
+                            report.Type.Add(Type.Server);
                         }
                     }
                     else
                     {
-                        if (report.Type == null)
+                        if (!report.Type.Contains(Type.Client))
                         {
-                            report.Type = new Type[] { Type.Client };
-                        }
-                        else if (!report.Type.Any(x => x == Type.Client))
-                        {
-                            report.Type = report.Type.Append(Type.Client).ToArray();
+                            report.Type.Add(Type.Client);
                         }
                     }
                 }
             }
             else if (!string.IsNullOrEmpty(report.Sku))
             {
-                if (report.Sku.ToLower() == "ads")
+                if (report.Sku.Equals("ads", StringComparison.InvariantCultureIgnoreCase))
                 {
                     report.Sku = "AdvancedServer";
                 }
 
-                if (report.Sku.ToLower() == "pro")
+                if (report.Sku.Equals("pro", StringComparison.InvariantCultureIgnoreCase))
                 {
                     report.Sku = "Professional";
                 }
 
-                if ((report.Sku.ToLower().Contains("server") && report.Sku.ToLower().EndsWith("hyperv")) ||
-                    (report.Sku.ToLower().Contains("server") && report.Sku.ToLower().EndsWith("v")))
+                if ((report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase)) ||
+                    (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("v", StringComparison.InvariantCultureIgnoreCase)))
                 {
-                    if (report.Type == null)
+                    if (!report.Type.Contains(Type.ServerV))
                     {
-                        report.Type = new Type[] { Type.ServerV };
-                    }
-                    else if (!report.Type.Any(x => x == Type.ServerV))
-                    {
-                        report.Type = report.Type.Append(Type.ServerV).ToArray();
+                        report.Type.Add(Type.ServerV);
                     }
                 }
-                else if (report.Sku.ToLower().Contains("server"))
+                else if (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    if (report.Type == null)
+                    if (!report.Type.Contains(Type.Server))
                     {
-                        report.Type = new Type[] { Type.Server };
-                    }
-                    else if (!report.Type.Any(x => x == Type.Server))
-                    {
-                        report.Type = report.Type.Append(Type.Server).ToArray();
+                        report.Type.Add(Type.Server);
                     }
                 }
                 else
                 {
-                    if (report.Type == null)
+                    if (!report.Type.Contains(Type.Client))
                     {
-                        report.Type = new Type[] { Type.Client };
-                    }
-                    else if (!report.Type.Any(x => x == Type.Client))
-                    {
-                        report.Type = report.Type.Append(Type.Client).ToArray();
+                        report.Type.Add(Type.Client);
                     }
                 }
             }
@@ -337,7 +314,10 @@ namespace WindowsBuildIdentifier
             fs.Seek(peOffset, SeekOrigin.Begin);
             UInt32 peHead = br.ReadUInt32();
             if (peHead != 0x00004550) // "PE\0\0", little-endian
+            {
                 throw new Exception("Can't find PE header");
+            }
+
             MachineType machineType = (MachineType)br.ReadUInt16();
             br.Close();
             fs.Close();
@@ -473,11 +453,19 @@ namespace WindowsBuildIdentifier
                     }
 
                     if (UBR.HasValue)
+                    {
                         result.DeltaVersion = (ulong)UBR.Value;
+                    }
+
                     if (Major.HasValue)
+                    {
                         result.MajorVersion = (ulong)Major.Value;
+                    }
+
                     if (Minor.HasValue)
+                    {
                         result.MinorVersion = (ulong)Minor.Value;
+                    }
 
                     if (!string.IsNullOrEmpty(releaseId))
                     {
@@ -535,7 +523,7 @@ namespace WindowsBuildIdentifier
                     {
                         var name = cultures.First(x => x.LCID == int.Parse(langid, NumberStyles.HexNumber, CultureInfo.CurrentCulture)).Name;
                         if (result.LanguageCodes == null ||
-                            result.LanguageCodes != null && !result.LanguageCodes.Any(x => x.ToLower() == name.ToLower()))
+                            result.LanguageCodes != null && !result.LanguageCodes.Any(x => x.Equals(name, StringComparison.InvariantCultureIgnoreCase)))
                         {
                             if (result.LanguageCodes == null)
                             {
@@ -691,7 +679,7 @@ namespace WindowsBuildIdentifier
 
         private static string[] GatherUnstagedEditions(WindowsInstallProviderInterface installProvider)
         {
-            string[] report = null;
+            SortedSet<string> report = new SortedSet<string>();
             foreach (var x in installProvider.GetFileSystemEntries())
             {
                 bool foundsomething = false;
@@ -707,17 +695,13 @@ namespace WindowsBuildIdentifier
                     foundsomething = true;
 
                     var split = x.Split('\\');
-                    var packagename = split[split.Length - 2];
+                    var packagename = split[^2];
                     var lastpart = packagename.Split('-').Last();
                     var skufound = lastpart.Split('_')[0];
 
-                    if (report == null)
+                    if (!report.Contains(skufound))
                     {
-                        report = new string[] { skufound };
-                    }
-                    else
-                    {
-                        report = report.Append(skufound).ToArray();
+                        report.Add(skufound);
                     }
                 }
 
@@ -733,15 +717,11 @@ namespace WindowsBuildIdentifier
                         foundsomething = true;
 
                         var split = x.Split('\\');
-                        var packagename = split[split.Length - 2];
+                        var packagename = split[^2];
 
-                        if (report == null)
+                        if (!report.Contains(packagename))
                         {
-                            report = new string[] { packagename };
-                        }
-                        else
-                        {
-                            report = report.Append(packagename).ToArray();
+                            report.Add(packagename);
                         }
                     }
 
@@ -752,80 +732,40 @@ namespace WindowsBuildIdentifier
                         filenamelast.EndsWith("dll"))
                         {
                             var split = x.Split('\\');
-                            var packagename = split[split.Length - 2];
+                            var packagename = split[^2];
                             var splitpkg = packagename.Split('-');
                             var lastpart = splitpkg.Last();
                             var skufound = lastpart.Split('_')[0];
-                            if (skufound.ToLower() == "edition")
+                            if (skufound.Equals("edition", StringComparison.InvariantCultureIgnoreCase))
                             {
-                                skufound = splitpkg[splitpkg.Length - 2];
+                                skufound = splitpkg[^2];
                             }
 
-                            if (report == null)
+                            if (!report.Contains(skufound))
                             {
-                                report = new string[] { skufound };
-                            }
-                            else
-                            {
-                                report = report.Append(skufound).ToArray();
+                                report.Add(skufound);
                             }
                         }
                     }
                 }
             }
 
-            return report;
+            return report.ToArray();
         }
 
         public static void DisplayReport(Report report)
         {
-            string typedisp = "";
-            if (report.Type != null)
-            {
-                foreach (var type in report.Type)
-                {
-                    if (string.IsNullOrEmpty(typedisp))
-                    {
-                        typedisp = type.ToString();
-                    }
-                    else
-                    {
-                        typedisp += ", " + type.ToString();
-                    }
-                }
-            }
+            string typedisp = report.Type != null
+                ? string.Join(", ", report.Type.Select(e => e.ToString()))
+                : "";
 
-            string editiondisp = "";
-            if (report.Editions != null)
-            {
-                foreach (var edition in report.Editions)
-                {
-                    if (string.IsNullOrEmpty(editiondisp))
-                    {
-                        editiondisp = edition;
-                    }
-                    else
-                    {
-                        editiondisp += ", " + edition;
-                    }
-                }
-            }
+            string editiondisp = report.Editions != null
+                ? string.Join(", ", report.Editions.Select(e => e.ToString()))
+                : "";
 
-            string langdisp = "";
-            if (report.LanguageCodes != null)
-            {
-                foreach (var lang in report.LanguageCodes)
-                {
-                    if (string.IsNullOrEmpty(langdisp))
-                    {
-                        langdisp = lang;
-                    }
-                    else
-                    {
-                        langdisp += ", " + lang;
-                    }
-                }
-            }
+            string langdisp = report.LanguageCodes != null
+                ? string.Join(", ", report.LanguageCodes.Select(e => e.ToString()))
+                : "";
 
             Console.WriteLine();
             Console.WriteLine("MajorVersion : " + report.MajorVersion);
