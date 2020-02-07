@@ -52,8 +52,13 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             string softwareHivePath = "";
             string systemHivePath = "";
 
-            var kernelEntry = fileentries.FirstOrDefault(x => x.EndsWith(@"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase))
-                ?? fileentries.FirstOrDefault(x => x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase));
+            var kernelEntry = fileentries.FirstOrDefault(x => 
+            x.EndsWith(
+                @"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase) && 
+                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase)) ?? 
+            fileentries.FirstOrDefault(x => 
+                x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase) && 
+                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase));
             if (kernelEntry != null)
             {
                 kernelPath = installProvider.ExpandFile(kernelEntry);
