@@ -11,7 +11,7 @@ namespace WindowsBuildIdentifier.Identification
         {
             BinaryReader br = new BinaryReader(fs);
             fs.Seek(0x3c, SeekOrigin.Begin);
-            Int32 peOffset = br.ReadInt32();
+            UInt32 peOffset = br.ReadUInt32();
             fs.Seek(peOffset, SeekOrigin.Begin);
             UInt32 peHead = br.ReadUInt32();
             if (peHead != 0x00004550) // "PE\0\0", little-endian
