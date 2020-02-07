@@ -117,27 +117,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             report.Licensing = info2.Licensing;
             report.LanguageCodes = info2.LanguageCodes;
 
-            WindowsVersion version1 = new WindowsVersion
-            {
-                MajorVersion = info.MajorVersion,
-                MinorVersion = info.MinorVersion,
-                BuildNumber = info.BuildNumber,
-                DeltaVersion = info.DeltaVersion,
-                BranchName = info.BranchName,
-                CompileDate = info.CompileDate
-            };
-
-            WindowsVersion version2 = new WindowsVersion
-            {
-                MajorVersion = info2.MajorVersion,
-                MinorVersion = info2.MinorVersion,
-                BuildNumber = info2.BuildNumber,
-                DeltaVersion = info2.DeltaVersion,
-                BranchName = info2.BranchName,
-                CompileDate = info2.CompileDate
-            };
-
-            WindowsVersion correctVersion = Common.GetGreaterVersion(version1, version2);
+            WindowsVersion correctVersion = Common.GetGreaterVersion(info.version, info2.version);
 
             report.MajorVersion = correctVersion.MajorVersion;
             report.MinorVersion = correctVersion.MinorVersion;
@@ -237,14 +217,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
             result.Architecture = Common.GetMachineTypeFromFile(new FileStream(kernelPath, FileMode.Open));
 
-            WindowsVersion verinfo = Common.ParseBuildString(info.FileVersion);
-
-            result.MajorVersion = verinfo.MajorVersion;
-            result.MinorVersion = verinfo.MinorVersion;
-            result.BuildNumber = verinfo.BuildNumber;
-            result.DeltaVersion = verinfo.DeltaVersion;
-            result.BranchName = verinfo.BranchName;
-            result.CompileDate = verinfo.CompileDate;
+            result.version = Common.ParseBuildString(info.FileVersion);
 
             result.BuildType = info.IsDebug ? BuildType.chk : BuildType.fre;
 
@@ -254,6 +227,8 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
         private static VersionInfo2 ExtractVersionInfo2(string softwareHivePath, string systemHivePath)
         {
             VersionInfo2 result = new VersionInfo2();
+
+            result.version = new WindowsVersion();
 
             using (var hiveStream = new FileStream(softwareHivePath, FileMode.Open, FileAccess.Read))
             using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
@@ -275,34 +250,34 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                     {
                         var splitLab = buildLab.Split('.');
 
-                        result.BranchName = splitLab[1];
-                        result.CompileDate = splitLab[2];
-                        result.BuildNumber = ulong.Parse(splitLab[0]);
+                        result.version.BranchName = splitLab[1];
+                        result.version.CompileDate = splitLab[2];
+                        result.version.BuildNumber = ulong.Parse(splitLab[0]);
                     }
 
                     if (!string.IsNullOrEmpty(buildLabEx) && buildLabEx.Count(x => x == '.') == 4)
                     {
                         var splitLabEx = buildLabEx.Split('.');
 
-                        result.BranchName = splitLabEx[3];
-                        result.CompileDate = splitLabEx[4];
-                        result.DeltaVersion = ulong.Parse(splitLabEx[1]);
-                        result.BuildNumber = ulong.Parse(splitLabEx[0]);
+                        result.version.BranchName = splitLabEx[3];
+                        result.version.CompileDate = splitLabEx[4];
+                        result.version.DeltaVersion = ulong.Parse(splitLabEx[1]);
+                        result.version.BuildNumber = ulong.Parse(splitLabEx[0]);
                     }
 
                     if (UBR.HasValue)
                     {
-                        result.DeltaVersion = (ulong)UBR.Value;
+                        result.version.DeltaVersion = (ulong)UBR.Value;
                     }
 
                     if (Major.HasValue)
                     {
-                        result.MajorVersion = (ulong)Major.Value;
+                        result.version.MajorVersion = (ulong)Major.Value;
                     }
 
                     if (Minor.HasValue)
                     {
-                        result.MinorVersion = (ulong)Minor.Value;
+                        result.version.MinorVersion = (ulong)Minor.Value;
                     }
 
                     if (!string.IsNullOrEmpty(releaseId))
