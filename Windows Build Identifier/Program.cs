@@ -57,6 +57,11 @@ namespace WindowsBuildIdentifier
                 Identification.MediaHandler.IdentifyWindowsFromISO(isopath);
             }
 
+            foreach (var isopath in Directory.GetFiles(args[0], "*.mdf", SearchOption.AllDirectories))
+            {
+                Identification.MediaHandler.IdentifyWindowsFromMDF(isopath);
+            }
+
             foreach (var vhdpath in Directory.GetFiles(args[0], "*.vhd", SearchOption.AllDirectories))
             {
                 Identification.MediaHandler.IdentifyWindowsFromVHD(vhdpath);

@@ -278,6 +278,74 @@ namespace WindowsBuildIdentifier.Identification
             }
         }
 
+        public static void IdentifyWindowsFromMDF(string isopath)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Opening MDF File");
+            Console.WriteLine(isopath);
+            try
+            {
+                using FileStream isoStream = File.Open(isopath, FileMode.Open, FileAccess.Read);
+
+                VfsFileSystemFacade cd = new CDReader(isoStream, true);
+                if (cd.FileExists(@"README.TXT"))
+                {
+                    cd = new UdfReader(isoStream);
+                }
+
+                //
+                // WIM Setup
+                //
+                if (cd.FileExists(@"sources\install.wim"))
+                {
+                    try
+                    {
+                        //
+                        // If this succeeds we are processing a properly supported final (or near final)
+                        // WIM file format, so we use the adequate function to handle it.
+                        //
+                        IdentifyWindowsNTFromWIM(cd.OpenFile(@"sources\install.wim", FileMode.Open, FileAccess.Read));
+                    }
+                    catch (UnsupportedWIMException)
+                    {
+                        //
+                        // If this fails we are processing an early
+                        // WIM file format, so we use the adequate function to handle it.
+                        //
+                        Console.WriteLine("Early WIM Format TODO");
+                    }
+                }
+                else if (cd.FileExists(@"sources\install.esd"))
+                {
+                    try
+                    {
+                        //
+                        // If this succeeds we are processing a properly supported final (or near final)
+                        // WIM file format, so we use the adequate function to handle it.
+                        //
+                        IdentifyWindowsNTFromWIM(cd.OpenFile(@"sources\install.esd", FileMode.Open, FileAccess.Read));
+                    }
+                    catch (UnsupportedWIMException)
+                    {
+                        //
+                        // If this fails we are processing an early
+                        // WIM file format, so we use the adequate function to handle it.
+                        //
+                        Console.WriteLine("Early WIM Format TODO");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("No idea");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Fail");
+                Console.WriteLine(ex.ToString());
+            }
+        }
+
         public static void IdentifyWindowsFromVHD(string vhdpath)
         {
             Console.WriteLine();
