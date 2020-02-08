@@ -429,13 +429,11 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
             var packages = installProvider.GetFileSystemEntries().Where(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
 
-            bool containsFiles = packages.Any(x => x.Count(y => y == '\\') == 1 && x.Contains("."));
+            var files = packages.Where(x => x.Count(y => y == '\\') == 1 && x.Contains("."));
 
-            if (containsFiles)
+            if (files.Any())
             {
                 // This is the final layout
-
-                var files = packages.Where(x => x.Count(y => y == '\\') == 1 && x.Contains("."));
 
                 var neutralNames = files.Select(x => string.Join(".", x.Split('.')[0..^1])).Distinct();
 
