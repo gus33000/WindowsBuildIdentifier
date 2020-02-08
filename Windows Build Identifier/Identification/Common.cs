@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace WindowsBuildIdentifier.Identification
 {
@@ -155,6 +157,53 @@ namespace WindowsBuildIdentifier.Identification
             }
 
             return version1;
+        }
+
+        public static PolicyValue[] ParseProductPolicy(byte[] productPolicy)
+        {
+            HashSet<PolicyValue> policyValues = new HashSet<PolicyValue>();
+
+            Console.WriteLine("Parsing product policy");
+
+            int totalSize = BitConverter.ToInt32(productPolicy, 0);
+            int valuesSize = BitConverter.ToInt32(productPolicy, 4);
+            int endMarkerSize = BitConverter.ToInt32(productPolicy, 8);
+
+            int headerSize = totalSize - valuesSize - endMarkerSize;
+
+            byte[] valueBuffer = productPolicy[headerSize..(headerSize + valuesSize - 1)];
+            using (var innerStream = new MemoryStream(valueBuffer))
+            using (var stream = new BinaryReader(innerStream))
+            {
+                while (innerStream.Position <= innerStream.Length)
+                {
+                    var currentPosition = innerStream.Position;
+                    var totalLength = stream.ReadInt16();
+                    var nameLength = stream.ReadInt16();
+                    var valueType = stream.ReadInt16();
+                    var valueLength = stream.ReadInt16();
+
+                    if (stream.ReadInt32() == 0)
+                        innerStream.Seek(4, SeekOrigin.Current);
+                    else
+                        innerStream.Seek(-4, SeekOrigin.Current);
+
+                    string valueName = Encoding.Unicode.GetString(stream.ReadBytes(nameLength));
+                    byte[] value = stream.ReadBytes(valueLength);
+                    innerStream.Seek(currentPosition + totalLength, SeekOrigin.Begin);
+
+                    policyValues.Add(new PolicyValue { Name = valueName, Type = valueType, Data = value });
+
+#if DEBUG
+                    Console.WriteLine();
+                    Console.WriteLine("Name: " + valueName);
+                    Console.WriteLine("Type: " + valueType);
+                    Console.WriteLine("Data: " + BitConverter.ToString(value));
+#endif
+                }
+            }
+
+            return policyValues.ToArray();
         }
 
         public static void DisplayReport(Report report)

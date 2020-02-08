@@ -76,9 +76,9 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 systemHivePath = installProvider.ExpandFile(systemHiveEntry);
             }
 
-            bool IsUnstaged = fileentries.Any(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
-
+            #region Version Gathering
             VersionInfo1 info = new VersionInfo1();
+            VersionInfo2 info2 = new VersionInfo2();
 
             if (!string.IsNullOrEmpty(kernelPath))
             {
@@ -91,26 +91,11 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 report.BuildType = info.BuildType;
             }
 
-            if (IsUnstaged)
+            if (!string.IsNullOrEmpty(softwareHivePath) && !string.IsNullOrEmpty(systemHivePath))
             {
-                report.Sku = "Unstaged";
-
-                Console.WriteLine("Image detected as unstaged, gathering target editions available in the image");
-
-                // parse editions
-                report.Editions = GatherUnstagedEditions(installProvider);
+                Console.WriteLine("Extracting version information from the image 2");
+                info2 = ExtractVersionInfo2(softwareHivePath, systemHivePath);
             }
-            else
-            {
-                Console.WriteLine("Extracting additional edition information");
-                report.Sku = ExtractEditionInfo(systemHivePath);
-            }
-
-            Console.WriteLine("Extracting version information from the image 2");
-            VersionInfo2 info2 = ExtractVersionInfo2(softwareHivePath, systemHivePath);
-
-            File.Delete(softwareHivePath);
-            File.Delete(systemHivePath);
 
             report.Tag = info2.Tag;
             report.Licensing = info2.Licensing;
@@ -124,6 +109,51 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             report.DeltaVersion = correctVersion.DeltaVersion;
             report.BranchName = correctVersion.BranchName;
             report.CompileDate = correctVersion.CompileDate;
+            #endregion
+
+            #region Edition Gathering
+            bool IsUnstaged = fileentries.Any(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
+            
+            if (IsUnstaged)
+            {
+                report.Sku = "Unstaged";
+
+                Console.WriteLine("Image detected as unstaged, gathering target editions available in the image");
+
+                // parse editions
+                report.Editions = GatherUnstagedEditions(installProvider);
+            }
+            else if (fileentries.Contains(@"InstalledRepository\Windows.config"))
+            {
+                var packageFile = installProvider.ExpandFile(@"InstalledRepository\Windows.config");
+
+                using var fileStream = File.OpenRead(packageFile);
+                using var streamReader = new StreamReader(fileStream);
+
+                string line = "";
+
+                while (!line.Contains("configurationIdentity"))
+                    line = streamReader.ReadLine();
+
+                var editionPackageName = line.Split("name=\"")[1].Split("\"")[0];
+
+                var editionName = string.Join("", editionPackageName.Split(" ")[1..^0]);
+                if (editionName == "Server")
+                {
+                    editionName = "ServerStandard";
+                }
+
+                report.Sku = editionName;
+            }
+            else
+            {
+                Console.WriteLine("Extracting additional edition information");
+                report.Sku = ExtractEditionInfo(systemHivePath);
+            }
+            #endregion
+
+            File.Delete(softwareHivePath);
+            File.Delete(systemHivePath);
 
             if (report.BuildNumber > 2195)
             {
@@ -315,6 +345,26 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             using (var hiveStream = new FileStream(systemHivePath, FileMode.Open, FileAccess.Read))
             using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
             {
+                try
+                {
+                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
+
+                    var prodpol = (byte[])subkey.GetValue("ProductPolicy");
+
+                    var policies = Common.ParseProductPolicy(prodpol);
+
+                    if (policies.Any(x => x.Name == "Kernel-ProductInfo"))
+                    {
+                        var pol = policies.First(x => x.Name == "Kernel-ProductInfo");
+
+                        if (pol.Type == 4)
+                        {
+                            int product = BitConverter.ToInt32(pol.Data);
+                            Console.WriteLine("Detected product id: " + product);
+                        }
+                    }
+                } catch { };
+
                 try
                 {
                     DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\MUI\UILanguages");

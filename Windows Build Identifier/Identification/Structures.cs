@@ -22,6 +22,13 @@ namespace WindowsBuildIdentifier.Identification
         Volume
     }
 
+    public class PolicyValue
+    {
+        public string Name;
+        public int Type;
+        public byte[] Data;
+    }
+
     public class Report
     {
         public ulong MajorVersion;
