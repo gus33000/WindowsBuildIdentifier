@@ -52,12 +52,12 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             string softwareHivePath = "";
             string systemHivePath = "";
 
-            var kernelEntry = fileentries.FirstOrDefault(x => 
+            var kernelEntry = fileentries.FirstOrDefault(x =>
             x.EndsWith(
-                @"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase) && 
-                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase)) ?? 
-            fileentries.FirstOrDefault(x => 
-                x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase) && 
+                @"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase) &&
+                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase)) ??
+            fileentries.FirstOrDefault(x =>
+                x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase) &&
                 !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase));
             if (kernelEntry != null)
             {
@@ -76,8 +76,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 systemHivePath = installProvider.ExpandFile(systemHiveEntry);
             }
 
-            bool IsUnstaged = !fileentries.Any(x => x.Contains(@"system32\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase)) &&
-                !fileentries.Any(x => x.Contains(@"system32\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase));
+            bool IsUnstaged = fileentries.Any(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
 
             VersionInfo1 info = new VersionInfo1();
 
@@ -427,74 +426,38 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
         private static string[] GatherUnstagedEditions(WindowsInstallProviderInterface installProvider)
         {
             SortedSet<string> report = new SortedSet<string>();
-            foreach (var x in installProvider.GetFileSystemEntries())
+
+            var packages = installProvider.GetFileSystemEntries().Where(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
+
+            bool containsFiles = packages.Any(x => x.Count(y => y == '\\') == 1 && x.Contains("."));
+
+            if (containsFiles)
             {
-                bool foundsomething = false;
+                // This is the final layout
 
-                var filename = x.ToLower();
-                if (filename.StartsWith("packages") &&
-                    filename.Contains("sku") &&
-                    filename.IndexOf("sku") > ("packages").Length &&
-                    filename.Contains("security-licensing-slc-component-sku") &&
-                    filename.Contains("pl") &&
-                    filename.Contains("xrm"))
+                var files = packages.Where(x => x.Count(y => y == '\\') == 1 && x.Contains("."));
+
+                var neutralNames = files.Select(x => string.Join(".", x.Split('.')[0..^1])).Distinct();
+
+                foreach (var name in neutralNames)
                 {
-                    foundsomething = true;
-
-                    var split = x.Split('\\');
-                    var packagename = split[^2];
-                    var lastpart = packagename.Split('-').Last();
-                    var skufound = lastpart.Split('_')[0];
-
-                    if (!report.Contains(skufound))
+                    if (files.Contains(name + ".mum") &&
+                        files.Contains(name + ".cat") &&
+                        files.Contains(name + ".xml"))
                     {
-                        report.Add(skufound);
+                        // This should be a target edition package
+                        report.Add(name.Replace(@"packages\", "", StringComparison.InvariantCultureIgnoreCase));
                     }
                 }
+            }
+            else
+            {
+                // This is the earlier layout, the folders present are thus the editions
 
-                if (!foundsomething)
-                {
-                    foundsomething = false;
-                    var filenamelast = filename.Split('\\').Last();
+                var editionFolders = packages.Where(x => x.Count(y => y == '\\') == 1);
+                var editions = editionFolders.Select(x => x.Replace(@"packages\", "", StringComparison.InvariantCultureIgnoreCase));
 
-                    if (filename.StartsWith("packages") &&
-                        filenamelast.StartsWith("update") &&
-                        filenamelast.Contains("update.mum"))
-                    {
-                        foundsomething = true;
-
-                        var split = x.Split('\\');
-                        var packagename = split[^2];
-
-                        if (!report.Contains(packagename))
-                        {
-                            report.Add(packagename);
-                        }
-                    }
-
-                    if (!foundsomething)
-                    {
-                        if (filename.StartsWith("packages") &&
-                        filenamelast.StartsWith("shellbrd") &&
-                        filenamelast.EndsWith("dll"))
-                        {
-                            var split = x.Split('\\');
-                            var packagename = split[^2];
-                            var splitpkg = packagename.Split('-');
-                            var lastpart = splitpkg.Last();
-                            var skufound = lastpart.Split('_')[0];
-                            if (skufound.Equals("edition", StringComparison.InvariantCultureIgnoreCase))
-                            {
-                                skufound = splitpkg[^2];
-                            }
-
-                            if (!report.Contains(skufound))
-                            {
-                                report.Add(skufound);
-                            }
-                        }
-                    }
-                }
+                report.UnionWith(editions);
             }
 
             return report.ToArray();
