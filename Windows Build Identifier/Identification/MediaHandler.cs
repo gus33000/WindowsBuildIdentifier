@@ -21,8 +21,8 @@ namespace WindowsBuildIdentifier.Identification
 
         private static string ExtractWIMXml(Stream wimstream)
         {
-            //try
-            //{
+            try
+            {
                 using (ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim))
                 {
                     if (archiveFile.Entries.Any(x => x.FileName == "[1].xml"))
@@ -46,11 +46,11 @@ namespace WindowsBuildIdentifier.Identification
                 }
 
                 throw new UnsupportedWIMException();
-            //}
-            /*catch (SevenZipException)
+            }
+            catch (SevenZipException)
             {
                 throw new UnsupportedWIMException();
-            }*/
+            }
         }
 
         private static XmlFormats.WIMXml.WIM GetWIMClassFromXml(string xml)
@@ -142,8 +142,11 @@ namespace WindowsBuildIdentifier.Identification
 
                 provider.Close();
 
+                // fallback
                 if (string.IsNullOrEmpty(report.Sku) || report.Sku == "TerminalServer")
                 {
+                    Console.WriteLine("WARNING: Falling back to WIM XML for edition gathering");
+
                     report.Sku = image.FLAGS;
 
                     report.Type = new HashSet<Type>();

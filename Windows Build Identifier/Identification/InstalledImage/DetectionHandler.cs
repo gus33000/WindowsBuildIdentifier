@@ -145,10 +145,10 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
                 report.Sku = editionName;
             }
-            else
+            else if (!string.IsNullOrEmpty(systemHivePath))
             {
                 Console.WriteLine("Extracting additional edition information");
-                report.Sku = ExtractEditionInfo(systemHivePath);
+                report.Sku = ExtractEditionFromRegistry(systemHivePath);
             }
             #endregion
 
@@ -253,6 +253,110 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             return result;
         }
 
+        private static string ExtractEditionFromRegistry(string systemHivePath)
+        {
+            string sku = "";
+
+            using (var hiveStream = new FileStream(systemHivePath, FileMode.Open, FileAccess.Read))
+            using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
+            {
+                try
+                {
+                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
+
+                    var prodpol = (byte[])subkey.GetValue("ProductPolicy");
+
+                    var policies = Common.ParseProductPolicy(prodpol);
+
+                    if (policies.Any(x => x.Name == "Kernel-ProductInfo"))
+                    {
+                        var pol = policies.First(x => x.Name == "Kernel-ProductInfo");
+
+                        if (pol.Type == 4)
+                        {
+                            int product = BitConverter.ToInt32(pol.Data);
+                            Console.WriteLine("Detected product id: " + product);
+
+                            if (Enum.IsDefined(typeof(Product), product))
+                            {
+                                sku = Enum.GetName(typeof(Product), product);
+                            }
+                            else
+                            {
+                                sku = $"UnknownAdditional{product.ToString("X")}";
+                            }
+
+                            Console.WriteLine("Effective SKU: " + sku);
+                        }
+                    }
+                }
+                catch { };
+
+                if (string.IsNullOrEmpty(sku))
+                {
+                    try
+                    {
+                        DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
+
+                        string[] list = (string[])subkey.GetValue("ProductSuite");
+
+                        sku = list.Length > 0 ? list[0] : "";
+                        if (string.IsNullOrEmpty(sku))
+                        {
+                            sku = "Workstation";
+                        }
+
+                        sku = sku.Replace(" ", "");
+
+                        switch (sku.ToLower())
+                        {
+                            case "enterprise":
+                            case "backoffice":
+                            case "datacenter":
+                            case "securityappliance":
+                                {
+                                    sku = sku + "Server";
+                                    break;
+                                }
+                            case "whserver":
+                                {
+                                    sku = "HomeServer";
+                                    break;
+                                }
+                            case "smallbusiness":
+                                {
+                                    sku = "SmallBusinessServer";
+                                    break;
+                                }
+                            case "smallbusiness(restricted)":
+                                {
+                                    sku = "SmallBusinessServerRestricted";
+                                    break;
+                                }
+                            case "blade":
+                                {
+                                    sku = "ServerWeb";
+                                    break;
+                                }
+                            case "embeddednt":
+                                {
+                                    sku = "Embedded";
+                                    break;
+                                }
+                            case "embedded(restricted)":
+                                {
+                                    sku = "EmbeddedRestricted";
+                                    break;
+                                }
+                        }
+                    }
+                    catch { };
+                }
+            }
+
+            return sku;
+        }
+
         private static VersionInfo2 ExtractVersionInfo2(string softwareHivePath, string systemHivePath)
         {
             VersionInfo2 result = new VersionInfo2();
@@ -347,26 +451,6 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             {
                 try
                 {
-                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
-
-                    var prodpol = (byte[])subkey.GetValue("ProductPolicy");
-
-                    var policies = Common.ParseProductPolicy(prodpol);
-
-                    if (policies.Any(x => x.Name == "Kernel-ProductInfo"))
-                    {
-                        var pol = policies.First(x => x.Name == "Kernel-ProductInfo");
-
-                        if (pol.Type == 4)
-                        {
-                            int product = BitConverter.ToInt32(pol.Data);
-                            Console.WriteLine("Detected product id: " + product);
-                        }
-                    }
-                } catch { };
-
-                try
-                {
                     DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\MUI\UILanguages");
 
                     result.LanguageCodes = subkey.GetSubKeyNames();
@@ -391,80 +475,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                             {
                                 result.LanguageCodes = new string[] { name };
                             }
-                            else
-                            {
-                                result.LanguageCodes = result.LanguageCodes.Append(name).ToArray();
-                            }
                         }
-                    }
-                }
-                catch { };
-            }
-
-            return result;
-        }
-
-        private static string ExtractEditionInfo(string systemHivePath)
-        {
-            string result = "";
-
-            using (var hiveStream = new FileStream(systemHivePath, FileMode.Open, FileAccess.Read))
-            using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
-            {
-                try
-                {
-                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
-
-                    string[] list = (string[])subkey.GetValue("ProductSuite");
-
-                    result = list.Length > 0 ? list[0] : "";
-                    if (string.IsNullOrEmpty(result))
-                    {
-                        result = "Workstation";
-                    }
-
-                    result = result.Replace(" ", "");
-
-                    switch (result.ToLower())
-                    {
-                        case "enterprise":
-                        case "backoffice":
-                        case "datacenter":
-                        case "securityappliance":
-                            {
-                                result = result + "Server";
-                                break;
-                            }
-                        case "whserver":
-                            {
-                                result = "HomeServer";
-                                break;
-                            }
-                        case "smallbusiness":
-                            {
-                                result = "SmallBusinessServer";
-                                break;
-                            }
-                        case "smallbusiness(restricted)":
-                            {
-                                result = "SmallBusinessServerRestricted";
-                                break;
-                            }
-                        case "blade":
-                            {
-                                result = "ServerWeb";
-                                break;
-                            }
-                        case "embeddednt":
-                            {
-                                result = "Embedded";
-                                break;
-                            }
-                        case "embedded(restricted)":
-                            {
-                                result = "EmbeddedRestricted";
-                                break;
-                            }
                     }
                 }
                 catch { };

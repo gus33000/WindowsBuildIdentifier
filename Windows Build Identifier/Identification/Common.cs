@@ -178,28 +178,26 @@ namespace WindowsBuildIdentifier.Identification
                 while (innerStream.Position <= innerStream.Length)
                 {
                     var currentPosition = innerStream.Position;
+
                     var totalLength = stream.ReadInt16();
                     var nameLength = stream.ReadInt16();
                     var valueType = stream.ReadInt16();
                     var valueLength = stream.ReadInt16();
 
-                    if (stream.ReadInt32() == 0)
-                        innerStream.Seek(4, SeekOrigin.Current);
-                    else
-                        innerStream.Seek(-4, SeekOrigin.Current);
+                    //
+                    // Earlier product policy format (5112 for example)
+                    // Doesn't have 2 extra values
+                    // We check if we have enough space for 2 extra values
+                    // If we do we skip both
+                    //
+                    if (valueLength + nameLength + 8 <= totalLength)
+                        innerStream.Seek(8, SeekOrigin.Current);
 
                     string valueName = Encoding.Unicode.GetString(stream.ReadBytes(nameLength));
                     byte[] value = stream.ReadBytes(valueLength);
                     innerStream.Seek(currentPosition + totalLength, SeekOrigin.Begin);
 
                     policyValues.Add(new PolicyValue { Name = valueName, Type = valueType, Data = value });
-
-#if DEBUG
-                    Console.WriteLine();
-                    Console.WriteLine("Name: " + valueName);
-                    Console.WriteLine("Type: " + valueType);
-                    Console.WriteLine("Data: " + BitConverter.ToString(value));
-#endif
                 }
             }
 
