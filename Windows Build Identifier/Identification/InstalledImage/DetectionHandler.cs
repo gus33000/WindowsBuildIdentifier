@@ -32,9 +32,9 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 {
     public class DetectionHandler
     {
-        public static Report IdentifyWindowsNT(WindowsInstallProviderInterface installProvider)
+        public static WindowsImage IdentifyWindowsNT(WindowsInstallProviderInterface installProvider)
         {
-            Report report = new Report();
+            WindowsImage report = new WindowsImage();
 
             var fileentries = installProvider.GetFileSystemEntries();
 
@@ -501,11 +501,13 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
                 var neutralNames = files.Select(x => string.Join(".", x.Split('.')[0..^1])).Distinct();
 
+                var fileArray = files.ToHashSet();
+
                 foreach (var name in neutralNames)
                 {
-                    if (files.Contains(name + ".mum") &&
-                        files.Contains(name + ".cat") &&
-                        files.Contains(name + ".xml"))
+                    if (fileArray.Contains(name + ".mum") &&
+                        fileArray.Contains(name + ".cat") &&
+                        fileArray.Contains(name + ".xml"))
                     {
                         // This should be a target edition package
                         report.Add(name.Replace(@"packages\", "", StringComparison.InvariantCultureIgnoreCase));

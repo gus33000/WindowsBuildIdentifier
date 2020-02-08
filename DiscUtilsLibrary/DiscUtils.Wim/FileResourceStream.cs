@@ -84,7 +84,7 @@ namespace DiscUtils.Wim
 
         public override bool CanSeek
         {
-            get { return false; }
+            get { return true; }
         }
 
         public override bool CanWrite
@@ -149,7 +149,25 @@ namespace DiscUtils.Wim
 
         public override long Seek(long offset, SeekOrigin origin)
         {
-            throw new NotSupportedException();
+            switch (origin)
+            {
+                case SeekOrigin.Begin:
+                    {
+                        _position = offset;
+                        break;
+                    }
+                case SeekOrigin.Current:
+                    {
+                        _position += offset;
+                        break;
+                    }
+                case SeekOrigin.End:
+                    {
+                        _position = _header.OriginalSize + offset;
+                        break;
+                    }
+            }
+            return _position;
         }
 
         public override void SetLength(long value)

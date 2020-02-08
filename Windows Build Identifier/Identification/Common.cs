@@ -204,7 +204,7 @@ namespace WindowsBuildIdentifier.Identification
             return policyValues.ToArray();
         }
 
-        public static void DisplayReport(Report report)
+        public static void DisplayReport(WindowsImage report)
         {
             string typedisp = report.Type != null
                 ? string.Join(", ", report.Type.Select(e => e.ToString()))

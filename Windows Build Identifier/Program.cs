@@ -23,9 +23,33 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Xml;
+using System.Xml.Serialization;
+using WindowsBuildIdentifier.Identification;
 
 namespace WindowsBuildIdentifier
 {
+    public class FileItem
+    {
+        public string Location;
+
+        public string MD5;
+
+        public string CreationTime;
+        public string LastAccessTime;
+        public string LastWriteTime;
+
+        public string Attributes;
+
+        public MetaData Metadata;
+    }
+
+    public class MetaData
+    {
+        public WindowsImageIndex[] WindowsImageIndexes;
+        public string VersionInfo;
+    }
+
     internal class Program
     {
         static void Main(string[] args)
@@ -43,48 +67,118 @@ namespace WindowsBuildIdentifier
             Console.ForegroundColor = ogcolor;
             Console.WriteLine();
 
-            if (args.Length < 1)
+            if (args.Length < 2)
             {
-                Console.WriteLine("Usage: <Path to directory containing ISO files>");
+                Console.WriteLine("Usage: <Path to file to analyze> <Path to output xml file>");
                 Console.WriteLine();
                 return;
             }
 
             DiscUtils.Complete.SetupHelper.SetupComplete();
 
+            /*HashSet<OpticalDiscMedia> results = new HashSet<OpticalDiscMedia>();
+
             foreach (var isopath in Directory.GetFiles(args[0], "*.iso", SearchOption.AllDirectories))
             {
-                Identification.MediaHandler.IdentifyWindowsFromISO(isopath);
+                results.Add(Identification.MediaHandler.IdentifyWindowsFromISO(isopath));
             }
 
-            foreach (var isopath in Directory.GetFiles(args[0], "*.mdf", SearchOption.AllDirectories))
+            XmlSerializer xsSubmit = new XmlSerializer(typeof(HashSet<OpticalDiscMedia>));
+            var xml = "";
+
+            using (var sww = new StringWriter())
             {
-                Identification.MediaHandler.IdentifyWindowsFromMDF(isopath);
+                using (XmlWriter writer = XmlWriter.Create(sww))
+                {
+                    xsSubmit.Serialize(writer, results);
+                    xml = sww.ToString();
+                }
             }
 
-            foreach (var vhdpath in Directory.GetFiles(args[0], "*.vhd", SearchOption.AllDirectories))
-            {
-                Identification.MediaHandler.IdentifyWindowsFromVHD(vhdpath);
-            }
+            File.WriteAllText(@"G:\output_builds_5.xml", xml);
+            */
 
-            foreach (var vhdpath in Directory.GetFiles(args[0], "*.vhdx", SearchOption.AllDirectories))
-            {
-                Identification.MediaHandler.IdentifyWindowsFromVHDX(vhdpath);
-            }
+            var file = args[0];
+            var extension = file.Split(".")[^1];
 
-            foreach (var vhdpath in Directory.GetFiles(args[0], "*.vmdk", SearchOption.AllDirectories))
+            switch (extension.ToLower())
             {
-                Identification.MediaHandler.IdentifyWindowsFromVMDK(vhdpath);
-            }
+                case "vhd":
+                    {
+                        Identification.MediaHandler.IdentifyWindowsFromVHD(file);
+                        break;
+                    }
+                case "vhdx":
+                    {
+                        Identification.MediaHandler.IdentifyWindowsFromVHDX(file);
+                        break;
+                    }
+                case "iso":
+                    {
+                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromISO(file);
 
-            foreach (var vhdpath in Directory.GetFiles(args[0], "*.vdi", SearchOption.AllDirectories))
-            {
-                Identification.MediaHandler.IdentifyWindowsFromVDI(vhdpath);
-            }
+                        XmlSerializer xsSubmit = new XmlSerializer(typeof(FileItem[]));
+                        var xml = "";
 
-            foreach (var wimpath in Directory.GetFiles(args[0], "*.wim", SearchOption.AllDirectories))
-            {
-                Identification.MediaHandler.IdentifyWindowsFromWIM(wimpath);
+                        using (var sww = new StringWriter())
+                        {
+                            using (XmlWriter writer = XmlWriter.Create(sww))
+                            {
+                                writer.Settings.Indent = true;
+                                writer.Settings.IndentChars = "     ";
+                                writer.Settings.NewLineOnAttributes = false;
+                                writer.Settings.OmitXmlDeclaration = true;
+
+                                xsSubmit.Serialize(writer, result);
+                                xml = sww.ToString();
+                            }
+                        }
+
+                        File.WriteAllText(args[1], xml);
+
+                        break;
+                    }
+                case "mdf":
+                    {
+                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromMDF(file);
+
+                        XmlSerializer xsSubmit = new XmlSerializer(typeof(FileItem[]));
+                        var xml = "";
+
+                        using (var sww = new StringWriter())
+                        {
+                            using (XmlWriter writer = XmlWriter.Create(sww))
+                            {
+                                writer.Settings.Indent = true;
+                                writer.Settings.IndentChars = "     ";
+                                writer.Settings.NewLineOnAttributes = false;
+                                writer.Settings.OmitXmlDeclaration = true;
+
+                                xsSubmit.Serialize(writer, result);
+                                xml = sww.ToString();
+                            }
+                        }
+
+                        File.WriteAllText(args[1], xml);
+
+                        break;
+                    }
+                case "vmdk":
+                    {
+                        Identification.MediaHandler.IdentifyWindowsFromVMDK(file);
+                        break;
+                    }
+                case "vdi":
+                    {
+                        Identification.MediaHandler.IdentifyWindowsFromVDI(file);
+                        break;
+                    }
+                case "wim":
+                case "esd":
+                    {
+                        Identification.MediaHandler.IdentifyWindowsFromWIM(new FileStream(file, FileMode.Open, FileAccess.Read));
+                        break;
+                    }
             }
 
             Console.WriteLine("Done.");

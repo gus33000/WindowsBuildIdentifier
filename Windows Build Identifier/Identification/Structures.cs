@@ -222,7 +222,16 @@ namespace WindowsBuildIdentifier.Identification
         public byte[] Data;
     }
 
-    public class Report
+    public class WindowsImageIndex
+    {
+        public string Name;
+        public string Description;
+        public string LastModifiedTime;
+        public string CreationTime;
+        public WindowsImage WindowsImage;
+    }
+
+    public class WindowsImage
     {
         public ulong MajorVersion;
         public ulong MinorVersion;

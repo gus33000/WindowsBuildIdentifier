@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
@@ -72,8 +73,10 @@ namespace WindowsBuildIdentifier.Identification
             }
         }
 
-        private static void IdentifyWindowsNTFromWIM(Stream wimstream)
+        private static WindowsImageIndex[] IdentifyWindowsNTFromWIM(Stream wimstream)
         {
+            HashSet<WindowsImageIndex> results = new HashSet<WindowsImageIndex>();
+
             Console.WriteLine("Gathering WIM information XML file");
 
             string xml = ExtractWIMXml(wimstream);
@@ -109,11 +112,11 @@ namespace WindowsBuildIdentifier.Identification
 
                 Console.WriteLine($"Index contains {irelevantcount} flags indicating this is a preinstallation environment");
 
-                if (irelevantcount != 0 && irelevantcount2 < wim.IMAGE.Length)
+                /*if (irelevantcount != 0 && irelevantcount2 < wim.IMAGE.Length)
                 {
                     Console.WriteLine("Skipping this image");
                     continue;
-                }
+                }*/
 
                 string index = wim.IMAGE.Count() == 1 ? null : image.INDEX;
 
@@ -176,9 +179,29 @@ namespace WindowsBuildIdentifier.Identification
                 }
 
                 Common.DisplayReport(report);
+
+                WindowsImageIndex imageIndex = new WindowsImageIndex();
+
+                imageIndex.Name = image.NAME;
+                imageIndex.Description = image.DESCRIPTION;
+
+                var creationtime = Convert.ToInt32(image.CREATIONTIME.HIGHPART, 16) * 4294967296 + Convert.ToInt32(image.CREATIONTIME.LOWPART, 16);
+                var lastmodifiedtime = Convert.ToInt32(image.LASTMODIFICATIONTIME.HIGHPART, 16) * 4294967296 + Convert.ToInt32(image.LASTMODIFICATIONTIME.LOWPART, 16);
+
+                var cTime = DateTime.FromFileTimeUtc(creationtime);
+                var lTime = DateTime.FromFileTimeUtc(lastmodifiedtime);
+
+                imageIndex.CreationTime = cTime.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                imageIndex.LastModifiedTime = lTime.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                imageIndex.WindowsImage = report;
+
+                results.Add(imageIndex);
             }
 
             wimstream.Dispose();
+
+            return results.ToArray();
         }
 
         private static void IdentifyWindowsNTFromVHD(Stream vhdstream)
@@ -213,11 +236,14 @@ namespace WindowsBuildIdentifier.Identification
             Common.DisplayReport(report);
         }
 
-        public static void IdentifyWindowsFromISO(string isopath)
+        public static FileItem[] IdentifyWindowsFromISO(string isopath)
         {
+            HashSet<FileItem> result = new HashSet<FileItem>();
+
             Console.WriteLine();
             Console.WriteLine("Opening ISO File");
             Console.WriteLine(isopath);
+
             try
             {
                 using FileStream isoStream = File.Open(isopath, FileMode.Open, FileAccess.Read);
@@ -228,50 +254,201 @@ namespace WindowsBuildIdentifier.Identification
                     cd = new UdfReader(isoStream);
                 }
 
-                //
-                // WIM Setup
-                //
-                if (cd.FileExists(@"sources\install.wim"))
+                foreach (var item in cd.GetDirectories("", null, SearchOption.AllDirectories))
                 {
-                    try
-                    {
-                        //
-                        // If this succeeds we are processing a properly supported final (or near final)
-                        // WIM file format, so we use the adequate function to handle it.
-                        //
-                        IdentifyWindowsNTFromWIM(cd.OpenFile(@"sources\install.wim", FileMode.Open, FileAccess.Read));
-                    }
-                    catch (UnsupportedWIMException)
-                    {
-                        //
-                        // If this fails we are processing an early
-                        // WIM file format, so we use the adequate function to handle it.
-                        //
-                        Console.WriteLine("Early WIM Format TODO");
-                    }
+                    FileItem fileItem = new FileItem();
+                    fileItem.Location = item;
+
+                    Console.WriteLine($"Folder: {fileItem.Location}");
+
+                    fileItem.Attributes = cd.GetAttributes(fileItem.Location).ToString();
+
+                    fileItem.LastAccessTime = cd.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem.LastWriteTime = cd.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem.CreationTime = cd.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                    result.Add(fileItem);
                 }
-                else if (cd.FileExists(@"sources\install.esd"))
+                foreach (var item in cd.GetFiles("", null, SearchOption.AllDirectories))
                 {
-                    try
+                    FileItem fileItem = new FileItem();
+                    fileItem.Location = item;
+
+                    Console.WriteLine($"File: {fileItem.Location}");
+
+                    fileItem.Attributes = cd.GetAttributes(fileItem.Location).ToString();
+
+                    fileItem.LastAccessTime = cd.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem.LastWriteTime = cd.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem.CreationTime = cd.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                    Console.WriteLine("Computing MD5");
+                    var md5hash = new MD5CryptoServiceProvider().ComputeHash(cd.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
+                    fileItem.MD5 = BitConverter.ToString(md5hash).Replace("-", "");
+
+                    var extension = fileItem.Location.Split(".")[^1];
+
+                    switch (extension.ToLower())
                     {
-                        //
-                        // If this succeeds we are processing a properly supported final (or near final)
-                        // WIM file format, so we use the adequate function to handle it.
-                        //
-                        IdentifyWindowsNTFromWIM(cd.OpenFile(@"sources\install.esd", FileMode.Open, FileAccess.Read));
+                        case "wim":
+                        case "esd":
+                            {
+                                try
+                                {
+                                    var tempIndexes = IdentifyWindowsFromWIM(cd.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
+                                    fileItem.Metadata = new MetaData();
+                                    fileItem.Metadata.WindowsImageIndexes = tempIndexes;
+                                }
+                                catch { };
+                                break;
+                            }
+                        case "mui":
+                        case "dll":
+                        case "sys":
+                        case "exe":
+                        case "efi":
+                            {
+                                try
+                                {
+                                    using var itemstream = cd.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
+                                    using var arch = new ArchiveFile(itemstream, SevenZipFormat.PE);
+
+                                    if (arch.Entries.Any(x => x.FileName.EndsWith("version.txt")))
+                                    {
+                                        var ver = arch.Entries.First(x => x.FileName.EndsWith("version.txt"));
+                                        var tmpf = Path.GetTempFileName();
+                                        ver.Extract(tmpf);
+
+                                        var vers = File.ReadAllText(tmpf);
+
+                                        fileItem.Metadata = new MetaData();
+                                        fileItem.Metadata.VersionInfo = vers;
+
+                                        File.Delete(tmpf);
+                                    }
+                                }
+                                catch { };
+                                break;
+                            }
                     }
-                    catch (UnsupportedWIMException)
+
+                    result.Add(fileItem);
+
+                    switch (extension.ToLower())
                     {
-                        //
-                        // If this fails we are processing an early
-                        // WIM file format, so we use the adequate function to handle it.
-                        //
-                        Console.WriteLine("Early WIM Format TODO");
+                        case "wim":
+                        case "esd":
+                            {
+                                try
+                                {
+                                    using var wimstrm = cd.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
+                                    var wimparsed = new DiscUtils.Wim.WimFile(wimstrm);
+
+                                    for (int i = 0; i < wimparsed.ImageCount; i++)
+                                    {
+                                        try
+                                        {
+                                            var image = wimparsed.GetImage(i);
+
+                                            foreach (var itm in image.GetDirectories("", null, SearchOption.AllDirectories))
+                                            {
+                                                try
+                                                {
+                                                    FileItem fileItem2 = new FileItem();
+                                                    fileItem2.Location = itm;
+
+                                                    Console.WriteLine(@$"Folder: {fileItem.Location}\{i}\{fileItem2.Location}");
+
+                                                    fileItem2.Attributes = image.GetAttributes(fileItem2.Location).ToString();
+
+                                                    fileItem2.LastAccessTime = image.GetLastAccessTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                                                    fileItem2.LastWriteTime = image.GetLastWriteTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                                                    fileItem2.CreationTime = image.GetCreationTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                                                    fileItem2.Location = @$"{fileItem.Location}\{i}\{fileItem2.Location}";
+
+                                                    result.Add(fileItem2);
+                                                }
+                                                catch { };
+                                            }
+
+                                            foreach (var itm in image.GetFiles("", null, SearchOption.AllDirectories))
+                                            {
+                                                try
+                                                {
+                                                    FileItem fileItem2 = new FileItem();
+                                                    fileItem2.Location = itm;
+
+                                                    Console.WriteLine(@$"File: {fileItem.Location}\{i}\{fileItem2.Location}");
+
+                                                    fileItem2.Attributes = image.GetAttributes(fileItem2.Location).ToString();
+
+                                                    fileItem2.LastAccessTime = image.GetLastAccessTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                                                    fileItem2.LastWriteTime = image.GetLastWriteTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                                                    fileItem2.CreationTime = image.GetCreationTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                                                    Console.WriteLine("Computing MD5");
+                                                    var md5hash2 = new MD5CryptoServiceProvider().ComputeHash(image.OpenFile(fileItem2.Location, FileMode.Open, FileAccess.Read));
+                                                    fileItem2.MD5 = BitConverter.ToString(md5hash2).Replace("-", "");
+
+                                                    var extension2 = fileItem2.Location.Split(".")[^1];
+
+                                                    switch (extension2.ToLower())
+                                                    {
+                                                        case "mui":
+                                                        case "dll":
+                                                        case "sys":
+                                                        case "exe":
+                                                        case "efi":
+                                                            {
+                                                                try
+                                                                {
+                                                                    using var itemstream = image.OpenFile(fileItem2.Location, FileMode.Open, FileAccess.Read);
+                                                                    using var arch = new ArchiveFile(itemstream, SevenZipFormat.PE);
+
+                                                                    if (arch.Entries.Any(x => x.FileName.EndsWith("version.txt")))
+                                                                    {
+                                                                        var ver = arch.Entries.First(x => x.FileName.EndsWith("version.txt"));
+                                                                        var tmpf = Path.GetTempFileName();
+                                                                        ver.Extract(tmpf, false);
+
+                                                                        var vers = File.ReadAllText(tmpf);
+
+                                                                        fileItem2.Metadata = new MetaData();
+                                                                        fileItem2.Metadata.VersionInfo = vers;
+
+                                                                        File.Delete(tmpf);
+                                                                    }
+                                                                }
+                                                                catch { };
+                                                                break;
+                                                            }
+                                                    }
+
+                                                    fileItem2.Location = @$"{fileItem.Location}\{i}\{fileItem2.Location}";
+
+                                                    result.Add(fileItem2);
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    Console.WriteLine(@$"File: {fileItem.Location}\{i}\{itm}");
+                                                    Console.WriteLine(ex.ToString());
+                                                };
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Console.WriteLine(ex.ToString());
+                                        };
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine(ex.ToString());
+                                };
+                                break;
+                            }
                     }
-                }
-                else
-                {
-                    Console.WriteLine("No idea");
                 }
             }
             catch (Exception ex)
@@ -279,13 +456,18 @@ namespace WindowsBuildIdentifier.Identification
                 Console.WriteLine("Fail");
                 Console.WriteLine(ex.ToString());
             }
+
+            return result.ToArray();
         }
 
-        public static void IdentifyWindowsFromMDF(string isopath)
+        public static FileItem[] IdentifyWindowsFromMDF(string isopath)
         {
+            HashSet<FileItem> result = new HashSet<FileItem>();
+
             Console.WriteLine();
             Console.WriteLine("Opening MDF File");
             Console.WriteLine(isopath);
+
             try
             {
                 using FileStream isoStream = File.Open(isopath, FileMode.Open, FileAccess.Read);
@@ -296,50 +478,117 @@ namespace WindowsBuildIdentifier.Identification
                     cd = new UdfReader(isoStream);
                 }
 
-                //
-                // WIM Setup
-                //
-                if (cd.FileExists(@"sources\install.wim"))
+                foreach (var item in cd.GetDirectories("", "*.*", SearchOption.AllDirectories))
                 {
-                    try
-                    {
-                        //
-                        // If this succeeds we are processing a properly supported final (or near final)
-                        // WIM file format, so we use the adequate function to handle it.
-                        //
-                        IdentifyWindowsNTFromWIM(cd.OpenFile(@"sources\install.wim", FileMode.Open, FileAccess.Read));
-                    }
-                    catch (UnsupportedWIMException)
-                    {
-                        //
-                        // If this fails we are processing an early
-                        // WIM file format, so we use the adequate function to handle it.
-                        //
-                        Console.WriteLine("Early WIM Format TODO");
-                    }
+                    FileItem fileItem = new FileItem();
+                    fileItem.Location = item;
+
+                    Console.WriteLine($"Folder: {fileItem.Location}");
+
+                    fileItem.Attributes = cd.GetAttributes(fileItem.Location).ToString();
+
+                    fileItem.LastAccessTime = cd.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem.LastWriteTime = cd.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem.CreationTime = cd.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                    result.Add(fileItem);
                 }
-                else if (cd.FileExists(@"sources\install.esd"))
+                foreach (var item in cd.GetFiles("", "*.*", SearchOption.AllDirectories))
                 {
-                    try
+                    FileItem fileItem = new FileItem();
+                    fileItem.Location = item;
+
+                    Console.WriteLine($"File: {fileItem.Location}");
+
+                    fileItem.Attributes = cd.GetAttributes(fileItem.Location).ToString();
+
+                    fileItem.LastAccessTime = cd.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem.LastWriteTime = cd.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem.CreationTime = cd.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                    Console.WriteLine("Computing MD5");
+                    var md5hash = new MD5CryptoServiceProvider().ComputeHash(cd.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
+                    fileItem.MD5 = BitConverter.ToString(md5hash).Replace("-", "");
+
+                    var extension = fileItem.Location.Split(".")[^1];
+
+                    switch (extension.ToLower())
                     {
-                        //
-                        // If this succeeds we are processing a properly supported final (or near final)
-                        // WIM file format, so we use the adequate function to handle it.
-                        //
-                        IdentifyWindowsNTFromWIM(cd.OpenFile(@"sources\install.esd", FileMode.Open, FileAccess.Read));
+                        case "wim":
+                        case "esd":
+                            {
+                                try
+                                {
+                                    var tempIndexes = IdentifyWindowsFromWIM(cd.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
+                                    fileItem.Metadata = new MetaData();
+                                    fileItem.Metadata.WindowsImageIndexes = tempIndexes;
+                                }
+                                catch { };
+                                break;
+                            }
                     }
-                    catch (UnsupportedWIMException)
+
+                    result.Add(fileItem);
+
+                    switch (extension.ToLower())
                     {
-                        //
-                        // If this fails we are processing an early
-                        // WIM file format, so we use the adequate function to handle it.
-                        //
-                        Console.WriteLine("Early WIM Format TODO");
+                        case "wim":
+                        case "esd":
+                            {
+                                try
+                                {
+                                    using var wimstrm = cd.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
+                                    var wimparsed = new DiscUtils.Wim.WimFile(wimstrm);
+
+                                    for (int i = 0; i < wimparsed.ImageCount; i++)
+                                    {
+                                        var image = wimparsed.GetImage(i);
+
+                                        foreach (var itm in image.GetDirectories("", "*.*", SearchOption.AllDirectories))
+                                        {
+                                            FileItem fileItem2 = new FileItem();
+                                            fileItem2.Location = itm;
+
+                                            Console.WriteLine($"File: {fileItem2.Location}");
+
+                                            fileItem2.Attributes = image.GetAttributes(fileItem2.Location).ToString();
+
+                                            fileItem2.LastAccessTime = image.GetLastAccessTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                                            fileItem2.LastWriteTime = image.GetLastWriteTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                                            fileItem2.CreationTime = image.GetCreationTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                                            fileItem2.Location = @$"{fileItem.Location}\{i}\{itm}";
+
+                                            result.Add(fileItem2);
+                                        }
+
+                                        foreach (var itm in image.GetFiles("", "*", SearchOption.AllDirectories))
+                                        {
+                                            FileItem fileItem2 = new FileItem();
+                                            fileItem2.Location = itm;
+
+                                            Console.WriteLine($"File: {fileItem2.Location}");
+
+                                            fileItem2.Attributes = image.GetAttributes(fileItem2.Location).ToString();
+
+                                            fileItem2.LastAccessTime = image.GetLastAccessTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                                            fileItem2.LastWriteTime = image.GetLastWriteTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                                            fileItem2.CreationTime = image.GetCreationTimeUtc(fileItem2.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                                            Console.WriteLine("Computing MD5");
+                                            var md5hash2 = new MD5CryptoServiceProvider().ComputeHash(image.OpenFile(fileItem2.Location, FileMode.Open, FileAccess.Read));
+                                            fileItem2.MD5 = BitConverter.ToString(md5hash2).Replace("-", "");
+
+                                            fileItem2.Location = @$"{fileItem.Location}\{i}\{itm}";
+
+                                            result.Add(fileItem2);
+                                        }
+                                    }
+                                }
+                                catch { };
+                                break;
+                            }
                     }
-                }
-                else
-                {
-                    Console.WriteLine("No idea");
                 }
             }
             catch (Exception ex)
@@ -347,6 +596,37 @@ namespace WindowsBuildIdentifier.Identification
                 Console.WriteLine("Fail");
                 Console.WriteLine(ex.ToString());
             }
+
+            return result.ToArray();
+        }
+
+        public static WindowsImageIndex[] IdentifyWindowsFromWIM(Stream wim)
+        {
+            WindowsImageIndex[] result = new WindowsImageIndex[0];
+
+            try
+            {
+                //
+                // If this succeeds we are processing a properly supported final (or near final)
+                // WIM file format, so we use the adequate function to handle it.
+                //
+                result = IdentifyWindowsNTFromWIM(wim);
+            }
+            catch (UnsupportedWIMException)
+            {
+                //
+                // If this fails we are processing an early
+                // WIM file format, so we use the adequate function to handle it.
+                //
+                Console.WriteLine("Early WIM Format TODO");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Fail");
+                Console.WriteLine(ex.ToString());
+            }
+
+            return result;
         }
 
         public static void IdentifyWindowsFromVHD(string vhdpath)
@@ -412,22 +692,6 @@ namespace WindowsBuildIdentifier.Identification
             {
                 using FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read);
                 IdentifyWindowsNTFromVDI(vhdStream);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Fail");
-                Console.WriteLine(ex.ToString());
-            }
-        }
-        public static void IdentifyWindowsFromWIM(string wimpath)
-        {
-            Console.WriteLine();
-            Console.WriteLine("Opening WIM File");
-            Console.WriteLine(wimpath);
-            try
-            {
-                using FileStream wimStream = File.Open(wimpath, FileMode.Open, FileAccess.Read);
-                IdentifyWindowsNTFromWIM(wimStream);
             }
             catch (Exception ex)
             {
