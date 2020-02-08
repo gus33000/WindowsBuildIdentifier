@@ -82,6 +82,11 @@ namespace WindowsBuildIdentifier
                 Identification.MediaHandler.IdentifyWindowsFromVDI(vhdpath);
             }
 
+            foreach (var wimpath in Directory.GetFiles(args[0], "*.wim", SearchOption.AllDirectories))
+            {
+                Identification.MediaHandler.IdentifyWindowsFromWIM(wimpath);
+            }
+
             Console.WriteLine("Done.");
 
 #if DEBUG

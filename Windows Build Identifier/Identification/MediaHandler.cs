@@ -416,5 +416,21 @@ namespace WindowsBuildIdentifier.Identification
                 Console.WriteLine(ex.ToString());
             }
         }
+        public static void IdentifyWindowsFromWIM(string wimpath)
+        {
+            Console.WriteLine();
+            Console.WriteLine("Opening WIM File");
+            Console.WriteLine(wimpath);
+            try
+            {
+                using FileStream wimStream = File.Open(wimpath, FileMode.Open, FileAccess.Read);
+                IdentifyWindowsNTFromWIM(wimStream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Fail");
+                Console.WriteLine(ex.ToString());
+            }
+        }
     }
 }
