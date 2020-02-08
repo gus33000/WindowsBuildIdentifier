@@ -127,23 +127,26 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             {
                 var packageFile = installProvider.ExpandFile(@"InstalledRepository\Windows.config");
 
-                using var fileStream = File.OpenRead(packageFile);
-                using var streamReader = new StreamReader(fileStream);
-
-                string line = "";
-
-                while (!line.Contains("configurationIdentity"))
-                    line = streamReader.ReadLine();
-
-                var editionPackageName = line.Split("name=\"")[1].Split("\"")[0];
-
-                var editionName = string.Join("", editionPackageName.Split(" ")[1..^0]);
-                if (editionName == "Server")
+                using (var fileStream = File.OpenRead(packageFile))
+                using (var streamReader = new StreamReader(fileStream))
                 {
-                    editionName = "ServerStandard";
+                    string line = "";
+
+                    while (!line.Contains("configurationIdentity"))
+                        line = streamReader.ReadLine();
+
+                    var editionPackageName = line.Split("name=\"")[1].Split("\"")[0];
+
+                    var editionName = string.Join("", editionPackageName.Split(" ")[1..^0]);
+                    if (editionName == "Server")
+                    {
+                        editionName = "ServerStandard";
+                    }
+
+                    report.Sku = editionName;
                 }
 
-                report.Sku = editionName;
+                File.Delete(packageFile);
             }
             else if (!string.IsNullOrEmpty(systemHivePath))
             {
