@@ -41,13 +41,14 @@ namespace WindowsBuildIdentifier
 
         public string Attributes;
 
+        public string VersionInfo;
+
         public MetaData Metadata;
     }
 
     public class MetaData
     {
         public WindowsImageIndex[] WindowsImageIndexes;
-        public string VersionInfo;
     }
 
     internal class Program
@@ -122,13 +123,14 @@ namespace WindowsBuildIdentifier
 
                         using (var sww = new StringWriter())
                         {
-                            using (XmlWriter writer = XmlWriter.Create(sww))
-                            {
-                                writer.Settings.Indent = true;
-                                writer.Settings.IndentChars = "     ";
-                                writer.Settings.NewLineOnAttributes = false;
-                                writer.Settings.OmitXmlDeclaration = true;
+                            XmlWriterSettings settings = new XmlWriterSettings();
+                            settings.Indent = true;
+                            settings.IndentChars = "     ";
+                            settings.NewLineOnAttributes = false;
+                            settings.OmitXmlDeclaration = true;
 
+                            using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                            {
                                 xsSubmit.Serialize(writer, result);
                                 xml = sww.ToString();
                             }

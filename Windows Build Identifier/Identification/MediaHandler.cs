@@ -316,15 +316,28 @@ namespace WindowsBuildIdentifier.Identification
                                     if (arch.Entries.Any(x => x.FileName.EndsWith("version.txt")))
                                     {
                                         var ver = arch.Entries.First(x => x.FileName.EndsWith("version.txt"));
-                                        var tmpf = Path.GetTempFileName();
-                                        ver.Extract(tmpf);
 
-                                        var vers = File.ReadAllText(tmpf);
+                                        using var memread = new MemoryStream();
+                                        ver.Extract(memread);
 
-                                        fileItem.Metadata = new MetaData();
-                                        fileItem.Metadata.VersionInfo = vers;
+                                        memread.Seek(0, SeekOrigin.Begin);
 
-                                        File.Delete(tmpf);
+                                        using TextReader tr = new StreamReader(memread);
+                                        
+                                        while (memread.Position != memread.Length)
+                                        {
+                                            var line = tr.ReadLine().Replace("\0", "");
+                                            if (line.Contains("FILEVERSION"))
+                                            {
+                                                fileItem.VersionInfo = line.Split(" ")[^1].Replace(",", "");
+                                            }
+                                            else if (line.Contains("VALUE \"FileVersion\","))
+                                            {
+                                                fileItem.VersionInfo = line.Split("\"")[^2];
+                                            }
+                                        }
+                                        
+                                        Console.WriteLine(fileItem.VersionInfo);
                                     }
                                 }
                                 catch { };
@@ -409,15 +422,28 @@ namespace WindowsBuildIdentifier.Identification
                                                                     if (arch.Entries.Any(x => x.FileName.EndsWith("version.txt")))
                                                                     {
                                                                         var ver = arch.Entries.First(x => x.FileName.EndsWith("version.txt"));
-                                                                        var tmpf = Path.GetTempFileName();
-                                                                        ver.Extract(tmpf, false);
 
-                                                                        var vers = File.ReadAllText(tmpf);
+                                                                        using var memread = new MemoryStream();
+                                                                        ver.Extract(memread);
 
-                                                                        fileItem2.Metadata = new MetaData();
-                                                                        fileItem2.Metadata.VersionInfo = vers;
+                                                                        memread.Seek(0, SeekOrigin.Begin);
 
-                                                                        File.Delete(tmpf);
+                                                                        using TextReader tr = new StreamReader(memread);
+
+                                                                        while (memread.Position != memread.Length)
+                                                                        {
+                                                                            var line = tr.ReadLine().Replace("\0", "");
+                                                                            if (line.Contains("FILEVERSION"))
+                                                                            {
+                                                                                fileItem2.VersionInfo = line.Split(" ")[^1].Replace(",", "");
+                                                                            }
+                                                                            else if (line.Contains("VALUE \"FileVersion\","))
+                                                                            {
+                                                                                fileItem2.VersionInfo = line.Split("\"")[^2];
+                                                                            }
+                                                                        }
+
+                                                                        Console.WriteLine(fileItem2.VersionInfo);
                                                                     }
                                                                 }
                                                                 catch { };
