@@ -181,23 +181,23 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                     if ((skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase) && skuunstaged.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase)) ||
                         (skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase) && skuunstaged.EndsWith("v", StringComparison.InvariantCultureIgnoreCase)))
                     {
-                        if (!report.Type.Contains(Type.ServerV))
+                        if (!report.Types.Contains(Type.ServerV))
                         {
-                            report.Type.Add(Type.ServerV);
+                            report.Types.Add(Type.ServerV);
                         }
                     }
                     else if (skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase))
                     {
-                        if (!report.Type.Contains(Type.Server))
+                        if (!report.Types.Contains(Type.Server))
                         {
-                            report.Type.Add(Type.Server);
+                            report.Types.Add(Type.Server);
                         }
                     }
                     else
                     {
-                        if (!report.Type.Contains(Type.Client))
+                        if (!report.Types.Contains(Type.Client))
                         {
-                            report.Type.Add(Type.Client);
+                            report.Types.Add(Type.Client);
                         }
                     }
                 }
@@ -217,23 +217,23 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 if ((report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase)) ||
                     (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("v", StringComparison.InvariantCultureIgnoreCase)))
                 {
-                    if (!report.Type.Contains(Type.ServerV))
+                    if (!report.Types.Contains(Type.ServerV))
                     {
-                        report.Type.Add(Type.ServerV);
+                        report.Types.Add(Type.ServerV);
                     }
                 }
                 else if (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    if (!report.Type.Contains(Type.Server))
+                    if (!report.Types.Contains(Type.Server))
                     {
-                        report.Type.Add(Type.Server);
+                        report.Types.Add(Type.Server);
                     }
                 }
                 else
                 {
-                    if (!report.Type.Contains(Type.Client))
+                    if (!report.Types.Contains(Type.Client))
                     {
-                        report.Type.Add(Type.Client);
+                        report.Types.Add(Type.Client);
                     }
                 }
             }

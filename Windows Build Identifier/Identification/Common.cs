@@ -206,8 +206,8 @@ namespace WindowsBuildIdentifier.Identification
 
         public static void DisplayReport(WindowsImage report)
         {
-            string typedisp = report.Type != null
-                ? string.Join(", ", report.Type.Select(e => e.ToString()))
+            string typedisp = report.Types != null
+                ? string.Join(", ", report.Types.Select(e => e.ToString()))
                 : "";
 
             string editiondisp = report.Editions != null
@@ -228,7 +228,7 @@ namespace WindowsBuildIdentifier.Identification
             Console.WriteLine("Tag          : " + report.Tag);
             Console.WriteLine("Architecture : " + report.Architecture);
             Console.WriteLine("BuildType    : " + report.BuildType);
-            Console.WriteLine("Type         : " + typedisp);
+            Console.WriteLine("Types        : " + typedisp);
             Console.WriteLine("Sku          : " + report.Sku);
             Console.WriteLine("Editions     : " + editiondisp);
             Console.WriteLine("Licensing    : " + report.Licensing);

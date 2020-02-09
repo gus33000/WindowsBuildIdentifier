@@ -242,7 +242,7 @@ namespace WindowsBuildIdentifier.Identification
         public string Tag;
         public MachineType Architecture;
         public BuildType BuildType;
-        public HashSet<Type> Type = new HashSet<Type>();
+        public HashSet<Type> Types = new HashSet<Type>();
         public string Sku;
         public string[] Editions;
         public Licensing Licensing;

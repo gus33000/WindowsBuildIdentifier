@@ -153,28 +153,28 @@ namespace WindowsBuildIdentifier.Identification
 
                     report.Sku = image.FLAGS;
 
-                    report.Type = new HashSet<Type>();
+                    report.Types = new HashSet<Type>();
 
                     if ((report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase)) ||
                     (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("v", StringComparison.InvariantCultureIgnoreCase)))
                     {
-                        if (!report.Type.Contains(Type.ServerV))
+                        if (!report.Types.Contains(Type.ServerV))
                         {
-                            report.Type.Add(Type.ServerV);
+                            report.Types.Add(Type.ServerV);
                         }
                     }
                     else if (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase))
                     {
-                        if (!report.Type.Contains(Type.Server))
+                        if (!report.Types.Contains(Type.Server))
                         {
-                            report.Type.Add(Type.Server);
+                            report.Types.Add(Type.Server);
                         }
                     }
                     else
                     {
-                        if (!report.Type.Contains(Type.Client))
+                        if (!report.Types.Contains(Type.Client))
                         {
-                            report.Type.Add(Type.Client);
+                            report.Types.Add(Type.Client);
                         }
                     }
                 }
@@ -237,7 +237,7 @@ namespace WindowsBuildIdentifier.Identification
             Common.DisplayReport(report);
         }
 
-        private static FileItem[] HandleFacade(DiscFileSystem facade, bool Recursivity = false)
+        private static FileItem[] HandleFacade(IFileSystem facade, bool Recursivity = false)
         {
             HashSet<FileItem> result = new HashSet<FileItem>();
 
@@ -251,7 +251,8 @@ namespace WindowsBuildIdentifier.Identification
 
                 Console.WriteLine($"Folder: {fileItem3.Location}");
 
-                fileItem3.Attributes = facade.GetAttributes(fileItem3.Location).ToString();
+                var tmpattribs3 = facade.GetAttributes(fileItem3.Location).ToString();
+                fileItem3.Attributes = tmpattribs3.Split(", ");
 
                 fileItem3.LastAccessTime = root.LastAccessTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
                 fileItem3.LastWriteTime = root.LastWriteTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
@@ -267,7 +268,8 @@ namespace WindowsBuildIdentifier.Identification
 
                     Console.WriteLine($"Folder: {fileItem.Location}");
 
-                    fileItem.Attributes = facade.GetAttributes(fileItem.Location).ToString();
+                    var tmpattribs = facade.GetAttributes(fileItem.Location).ToString();
+                    fileItem.Attributes = tmpattribs.Split(", ");
 
                     fileItem.LastAccessTime = facade.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
                     fileItem.LastWriteTime = facade.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
@@ -283,15 +285,28 @@ namespace WindowsBuildIdentifier.Identification
 
                     Console.WriteLine($"File: {fileItem.Location}");
 
-                    fileItem.Attributes = facade.GetAttributes(fileItem.Location).ToString();
+                    var tmpattribs = facade.GetAttributes(fileItem.Location).ToString();
+                    fileItem.Attributes = tmpattribs.Split(", ");
 
                     fileItem.LastAccessTime = facade.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
                     fileItem.LastWriteTime = facade.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
                     fileItem.CreationTime = facade.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
 
+                    fileItem.Size = facade.GetFileLength(fileItem.Location).ToString();
+
+                    fileItem.Hash = new Hash();
+
                     Console.WriteLine("Computing MD5");
                     var md5hash = new MD5CryptoServiceProvider().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
-                    fileItem.MD5 = BitConverter.ToString(md5hash).Replace("-", "");
+                    fileItem.Hash.MD5 = BitConverter.ToString(md5hash).Replace("-", "");
+
+                    Console.WriteLine("Computing SHA1");
+                    var sha1hash = new SHA1CryptoServiceProvider().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
+                    fileItem.Hash.SHA1 = BitConverter.ToString(sha1hash).Replace("-", "");
+
+                    Console.WriteLine("Computing CRC32");
+                    var crc32hash = new Crc32().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
+                    fileItem.Hash.CRC32 = BitConverter.ToString(crc32hash).Replace("-", "");
 
                     var extension = fileItem.Location.Split(".")[^1];
 
@@ -331,17 +346,20 @@ namespace WindowsBuildIdentifier.Identification
 
                                         using TextReader tr = new StreamReader(memread);
 
-                                        while (memread.Position != memread.Length)
+                                        var ln = tr.ReadLine();
+                                        while (ln != null)
                                         {
-                                            var line = tr.ReadLine().Replace("\0", "");
-                                            if (line.Contains("FILEVERSION"))
+                                            var line = ln.Replace("\0", "");
+                                            if (line.Contains("VALUE \"ProductVersion\","))
                                             {
-                                                fileItem.VersionInfo = line.Split(" ")[^1].Replace(",", "");
+                                                fileItem.ProductVersion = line.Split("\"")[^2];
                                             }
                                             else if (line.Contains("VALUE \"FileVersion\","))
                                             {
                                                 fileItem.VersionInfo = line.Split("\"")[^2];
                                             }
+
+                                            ln = tr.ReadLine();
                                         }
 
                                         Console.WriteLine(fileItem.VersionInfo);
@@ -372,7 +390,14 @@ namespace WindowsBuildIdentifier.Identification
                                             {
                                                 var image = wimparsed.GetImage(i);
                                                 var res = HandleFacade(image);
-                                                result = result.Concat(res).ToHashSet();
+
+                                                var res2 = res.Select(x =>
+                                                {
+                                                    x.Location = fileItem.Location + @$"\{i}\" + x.Location;
+                                                    return x;
+                                                });
+
+                                                result = result.Concat(res2).ToHashSet();
                                             }
                                             catch (Exception ex)
                                             {
@@ -400,7 +425,14 @@ namespace WindowsBuildIdentifier.Identification
                                         }
 
                                         var res = HandleFacade(cd);
-                                        result = result.Concat(res).ToHashSet();
+
+                                        var res2 = res.Select(x =>
+                                        {
+                                            x.Location = fileItem.Location + @"\" + x.Location;
+                                            return x;
+                                        });
+
+                                        result = result.Concat(res2).ToHashSet();
                                     }
                                     catch (Exception ex)
                                     {

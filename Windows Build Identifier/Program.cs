@@ -34,17 +34,27 @@ namespace WindowsBuildIdentifier
     {
         public string Location;
 
-        public string MD5;
-
         public string CreationTime;
         public string LastAccessTime;
         public string LastWriteTime;
 
-        public string Attributes;
+        public Hash Hash;
 
+        public string Size;
+
+        public string[] Attributes;
+
+        public string ProductVersion;
         public string VersionInfo;
 
         public MetaData Metadata;
+    }
+
+    public class Hash
+    {
+        public string MD5;
+        public string SHA1;
+        public string CRC32;
     }
 
     public class MetaData
