@@ -243,6 +243,23 @@ namespace WindowsBuildIdentifier.Identification
 
             try
             {
+                // add the root to the array
+                var root = facade.Root;
+
+                FileItem fileItem3 = new FileItem();
+                fileItem3.Location = @"\";
+
+                Console.WriteLine($"Folder: {fileItem3.Location}");
+
+                fileItem3.Attributes = facade.GetAttributes(fileItem3.Location).ToString();
+
+                fileItem3.LastAccessTime = root.LastAccessTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                fileItem3.LastWriteTime = root.LastWriteTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                fileItem3.CreationTime = root.CreationTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                result.Add(fileItem3);
+                // end of adding root
+
                 foreach (var item in facade.GetDirectories("", null, SearchOption.AllDirectories))
                 {
                     FileItem fileItem = new FileItem();
@@ -403,7 +420,7 @@ namespace WindowsBuildIdentifier.Identification
                 Console.WriteLine(ex.ToString());
             }
 
-            return result.ToArray();
+            return result.OrderBy(x => x.Location).ToArray();
         }
 
         public static FileItem[] IdentifyWindowsFromISO(string isopath)

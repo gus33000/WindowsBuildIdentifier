@@ -23,6 +23,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Xml;
 using System.Xml.Serialization;
 using WindowsBuildIdentifier.Identification;
@@ -136,7 +137,32 @@ namespace WindowsBuildIdentifier
                             }
                         }
 
-                        File.WriteAllText(args[1], xml);
+                        File.WriteAllText(args[1] + @"\" + "media_index.xml", xml);
+
+                        if (result.Any(x => x.Location.ToLower() == @"\sources\install.wim"))
+                        {
+                            var wimtag = result.First(x => x.Location.ToLower() == @"\sources\install.wim");
+
+                            xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
+                            xml = "";
+
+                            using (var sww = new StringWriter())
+                            {
+                                XmlWriterSettings settings = new XmlWriterSettings();
+                                settings.Indent = true;
+                                settings.IndentChars = "     ";
+                                settings.NewLineOnAttributes = false;
+                                settings.OmitXmlDeclaration = true;
+
+                                using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                                {
+                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xml = sww.ToString();
+                                }
+                            }
+
+                            File.WriteAllText(args[1] + @"\" + "media_windows_image.xml", xml);
+                        }
 
                         break;
                     }
