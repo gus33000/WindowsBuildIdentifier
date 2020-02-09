@@ -74,7 +74,7 @@ namespace WindowsBuildIdentifier.Identification
             }
         }
 
-        private static WindowsImageIndex[] IdentifyWindowsNTFromWIM(Stream wimstream)
+        private static WindowsImageIndex[] IdentifyWindowsNTFromWIM(Stream wimstream, bool include_pe)
         {
             HashSet<WindowsImageIndex> results = new HashSet<WindowsImageIndex>();
 
@@ -113,11 +113,11 @@ namespace WindowsBuildIdentifier.Identification
 
                 Console.WriteLine($"Index contains {irelevantcount} flags indicating this is a preinstallation environment");
 
-                /*if (irelevantcount != 0 && irelevantcount2 < wim.IMAGE.Length)
+                if (!include_pe && irelevantcount != 0 && irelevantcount2 < wim.IMAGE.Length)
                 {
                     Console.WriteLine("Skipping this image");
                     continue;
-                }*/
+                }
 
                 string index = wim.IMAGE.Count() == 1 ? null : image.INDEX;
 
@@ -242,48 +242,51 @@ namespace WindowsBuildIdentifier.Identification
             Common.DisplayReport(report);
         }
 
-        private static FileItem[] HandleFacade(IFileSystem facade, bool Recursivity = false)
+        private static FileItem[] HandleFacade(IFileSystem facade, bool Recursivity = false, bool index = false)
         {
             HashSet<FileItem> result = new HashSet<FileItem>();
 
             try
             {
-                // add the root to the array
-                var root = facade.Root;
-
-                if (root != null)
+                if (index)
                 {
-                    FileItem fileItem3 = new FileItem();
-                    fileItem3.Location = @"\";
+                    // add the root to the array
+                    var root = facade.Root;
 
-                    Console.WriteLine($"Folder: {fileItem3.Location}");
+                    if (root != null)
+                    {
+                        FileItem fileItem3 = new FileItem();
+                        fileItem3.Location = @"\";
 
-                    var tmpattribs3 = facade.GetAttributes(fileItem3.Location).ToString();
-                    fileItem3.Attributes = tmpattribs3.Split(", ");
+                        Console.WriteLine($"Folder: {fileItem3.Location}");
 
-                    fileItem3.LastAccessTime = root.LastAccessTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                    fileItem3.LastWriteTime = root.LastWriteTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                    fileItem3.CreationTime = root.CreationTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        var tmpattribs3 = facade.GetAttributes(fileItem3.Location).ToString();
+                        fileItem3.Attributes = tmpattribs3.Split(", ");
 
-                    result.Add(fileItem3);
-                }
-                // end of adding root
+                        fileItem3.LastAccessTime = root.LastAccessTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem3.LastWriteTime = root.LastWriteTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem3.CreationTime = root.CreationTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
 
-                foreach (var item in facade.GetDirectories("", null, SearchOption.AllDirectories))
-                {
-                    FileItem fileItem = new FileItem();
-                    fileItem.Location = item;
+                        result.Add(fileItem3);
+                    }
+                    // end of adding root
 
-                    Console.WriteLine($"Folder: {fileItem.Location}");
+                    foreach (var item in facade.GetDirectories("", null, SearchOption.AllDirectories))
+                    {
+                        FileItem fileItem = new FileItem();
+                        fileItem.Location = item;
 
-                    var tmpattribs = facade.GetAttributes(fileItem.Location).ToString();
-                    fileItem.Attributes = tmpattribs.Split(", ");
+                        Console.WriteLine($"Folder: {fileItem.Location}");
 
-                    fileItem.LastAccessTime = facade.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                    fileItem.LastWriteTime = facade.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                    fileItem.CreationTime = facade.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        var tmpattribs = facade.GetAttributes(fileItem.Location).ToString();
+                        fileItem.Attributes = tmpattribs.Split(", ");
 
-                    result.Add(fileItem);
+                        fileItem.LastAccessTime = facade.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.LastWriteTime = facade.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.CreationTime = facade.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+
+                        result.Add(fileItem);
+                    }
                 }
 
                 foreach (var item in facade.GetFiles("", null, SearchOption.AllDirectories))
@@ -291,30 +294,33 @@ namespace WindowsBuildIdentifier.Identification
                     FileItem fileItem = new FileItem();
                     fileItem.Location = item;
 
-                    Console.WriteLine($"File: {fileItem.Location}");
+                    if (index)
+                    {
+                        Console.WriteLine($"File: {fileItem.Location}");
 
-                    var tmpattribs = facade.GetAttributes(fileItem.Location).ToString();
-                    fileItem.Attributes = tmpattribs.Split(", ");
+                        var tmpattribs = facade.GetAttributes(fileItem.Location).ToString();
+                        fileItem.Attributes = tmpattribs.Split(", ");
 
-                    fileItem.LastAccessTime = facade.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                    fileItem.LastWriteTime = facade.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                    fileItem.CreationTime = facade.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.LastAccessTime = facade.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.LastWriteTime = facade.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.CreationTime = facade.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
 
-                    fileItem.Size = facade.GetFileLength(fileItem.Location).ToString();
+                        fileItem.Size = facade.GetFileLength(fileItem.Location).ToString();
 
-                    fileItem.Hash = new Hash();
+                        fileItem.Hash = new Hash();
 
-                    Console.WriteLine("Computing MD5");
-                    var md5hash = new MD5CryptoServiceProvider().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
-                    fileItem.Hash.MD5 = BitConverter.ToString(md5hash).Replace("-", "");
+                        Console.WriteLine("Computing MD5");
+                        var md5hash = new MD5CryptoServiceProvider().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
+                        fileItem.Hash.MD5 = BitConverter.ToString(md5hash).Replace("-", "");
 
-                    Console.WriteLine("Computing SHA1");
-                    var sha1hash = new SHA1CryptoServiceProvider().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
-                    fileItem.Hash.SHA1 = BitConverter.ToString(sha1hash).Replace("-", "");
+                        Console.WriteLine("Computing SHA1");
+                        var sha1hash = new SHA1CryptoServiceProvider().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
+                        fileItem.Hash.SHA1 = BitConverter.ToString(sha1hash).Replace("-", "");
 
-                    Console.WriteLine("Computing CRC32");
-                    var crc32hash = new Crc32().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
-                    fileItem.Hash.CRC32 = BitConverter.ToString(crc32hash).Replace("-", "");
+                        Console.WriteLine("Computing CRC32");
+                        var crc32hash = new Crc32().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
+                        fileItem.Hash.CRC32 = BitConverter.ToString(crc32hash).Replace("-", "");
+                    }
 
                     var extension = fileItem.Location.Split(".")[^1];
 
@@ -325,7 +331,7 @@ namespace WindowsBuildIdentifier.Identification
                             {
                                 try
                                 {
-                                    var tempIndexes = IdentifyWindowsFromWIM(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
+                                    var tempIndexes = IdentifyWindowsFromWIM(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read), index);
                                     fileItem.Metadata = new MetaData();
                                     fileItem.Metadata.WindowsImageIndexes = tempIndexes;
                                 }
@@ -338,73 +344,79 @@ namespace WindowsBuildIdentifier.Identification
                         case "exe":
                         case "efi":
                             {
-                                try
+                                if (index)
                                 {
-                                    using var itemstream = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
-                                    using var arch = new ArchiveFile(itemstream, SevenZipFormat.PE);
-
-                                    if (arch.Entries.Any(x => x.FileName.EndsWith("version.txt")))
+                                    try
                                     {
-                                        var ver = arch.Entries.First(x => x.FileName.EndsWith("version.txt"));
+                                        using var itemstream = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
+                                        using var arch = new ArchiveFile(itemstream, SevenZipFormat.PE);
 
-                                        using var memread = new MemoryStream();
-                                        ver.Extract(memread);
-
-                                        memread.Seek(0, SeekOrigin.Begin);
-
-                                        using TextReader tr = new StreamReader(memread, Encoding.Unicode);
-
-                                        fileItem.Version = new Version();
-
-                                        var ln = tr.ReadLine();
-                                        while (ln != null)
+                                        if (arch.Entries.Any(x => x.FileName.EndsWith("version.txt")))
                                         {
-                                            var line = ln.Replace("\0", "");
-                                            if (line.Contains("VALUE \"CompanyName\","))
-                                            {
-                                                fileItem.Version.CompanyName = line.Split("\"")[^2];
-                                            }
-                                            else if (line.Contains("VALUE \"FileDescription\","))
-                                            {
-                                                fileItem.Version.FileDescription = line.Split("\"")[^2];
-                                            }
-                                            else if (line.Contains("VALUE \"FileVersion\","))
-                                            {
-                                                fileItem.Version.FileVersion = line.Split("\"")[^2];
-                                            }
-                                            else if (line.Contains("VALUE \"InternalName\","))
-                                            {
-                                                fileItem.Version.InternalName = line.Split("\"")[^2];
-                                            }
-                                            else if (line.Contains("VALUE \"LegalCopyright\","))
-                                            {
-                                                fileItem.Version.LegalCopyright = line.Split("\"")[^2];
-                                            }
-                                            else if (line.Contains("VALUE \"OriginalFilename\","))
-                                            {
-                                                fileItem.Version.OriginalFilename = line.Split("\"")[^2];
-                                            }
-                                            else if (line.Contains("VALUE \"ProductName\","))
-                                            {
-                                                fileItem.Version.ProductName = line.Split("\"")[^2];
-                                            }
-                                            else if (line.Contains("VALUE \"ProductVersion\","))
-                                            {
-                                                fileItem.Version.ProductVersion = line.Split("\"")[^2];
-                                            }
+                                            var ver = arch.Entries.First(x => x.FileName.EndsWith("version.txt"));
 
-                                            ln = tr.ReadLine();
+                                            using var memread = new MemoryStream();
+                                            ver.Extract(memread);
+
+                                            memread.Seek(0, SeekOrigin.Begin);
+
+                                            using TextReader tr = new StreamReader(memread, Encoding.Unicode);
+
+                                            fileItem.Version = new Version();
+
+                                            var ln = tr.ReadLine();
+                                            while (ln != null)
+                                            {
+                                                var line = ln.Replace("\0", "");
+                                                if (line.Contains("VALUE \"CompanyName\","))
+                                                {
+                                                    fileItem.Version.CompanyName = line.Split("\"")[^2];
+                                                }
+                                                else if (line.Contains("VALUE \"FileDescription\","))
+                                                {
+                                                    fileItem.Version.FileDescription = line.Split("\"")[^2];
+                                                }
+                                                else if (line.Contains("VALUE \"FileVersion\","))
+                                                {
+                                                    fileItem.Version.FileVersion = line.Split("\"")[^2];
+                                                }
+                                                else if (line.Contains("VALUE \"InternalName\","))
+                                                {
+                                                    fileItem.Version.InternalName = line.Split("\"")[^2];
+                                                }
+                                                else if (line.Contains("VALUE \"LegalCopyright\","))
+                                                {
+                                                    fileItem.Version.LegalCopyright = line.Split("\"")[^2];
+                                                }
+                                                else if (line.Contains("VALUE \"OriginalFilename\","))
+                                                {
+                                                    fileItem.Version.OriginalFilename = line.Split("\"")[^2];
+                                                }
+                                                else if (line.Contains("VALUE \"ProductName\","))
+                                                {
+                                                    fileItem.Version.ProductName = line.Split("\"")[^2];
+                                                }
+                                                else if (line.Contains("VALUE \"ProductVersion\","))
+                                                {
+                                                    fileItem.Version.ProductVersion = line.Split("\"")[^2];
+                                                }
+
+                                                ln = tr.ReadLine();
+                                            }
                                         }
                                     }
+                                    catch { };
                                 }
-                                catch { };
                                 break;
                             }
                     }
 
-                    result.Add(fileItem);
+                    if (index)
+                        result.Add(fileItem);
+                    else if (fileItem.Metadata != null && fileItem.Metadata.WindowsImageIndexes != null)
+                        result.Add(fileItem);
 
-                    if (Recursivity)
+                    if (index && Recursivity)
                     {
                         switch (extension.ToLower())
                         {
@@ -506,7 +518,7 @@ namespace WindowsBuildIdentifier.Identification
             return result.OrderBy(x => x.Location).ToArray();
         }
 
-        public static FileItem[] IdentifyWindowsFromISO(string isopath, bool deep)
+        public static FileItem[] IdentifyWindowsFromISO(string isopath, bool deep, bool index)
         {
             FileItem[] result = new FileItem[0];
 
@@ -524,7 +536,7 @@ namespace WindowsBuildIdentifier.Identification
                     cd = new UdfReader(isoStream);
                 }
 
-                result = HandleFacade(cd, deep);
+                result = HandleFacade(cd, deep, index);
             }
             catch (Exception ex)
             {
@@ -535,7 +547,7 @@ namespace WindowsBuildIdentifier.Identification
             return result;
         }
 
-        public static FileItem[] IdentifyWindowsFromMDF(string isopath, bool deep)
+        public static FileItem[] IdentifyWindowsFromMDF(string isopath, bool deep, bool index)
         {
             FileItem[] result = new FileItem[0];
 
@@ -553,7 +565,7 @@ namespace WindowsBuildIdentifier.Identification
                     cd = new UdfReader(isoStream);
                 }
 
-                result = HandleFacade(cd, deep);
+                result = HandleFacade(cd, deep, index);
             }
             catch (Exception ex)
             {
@@ -564,7 +576,7 @@ namespace WindowsBuildIdentifier.Identification
             return result;
         }
 
-        public static WindowsImageIndex[] IdentifyWindowsFromWIM(Stream wim)
+        public static WindowsImageIndex[] IdentifyWindowsFromWIM(Stream wim, bool include_pe)
         {
             WindowsImageIndex[] result = new WindowsImageIndex[0];
 
@@ -574,7 +586,7 @@ namespace WindowsBuildIdentifier.Identification
                 // If this succeeds we are processing a properly supported final (or near final)
                 // WIM file format, so we use the adequate function to handle it.
                 //
-                result = IdentifyWindowsNTFromWIM(wim);
+                result = IdentifyWindowsNTFromWIM(wim, include_pe);
             }
             catch (UnsupportedWIMException)
             {

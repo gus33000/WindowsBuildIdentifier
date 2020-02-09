@@ -168,10 +168,10 @@ namespace WindowsBuildIdentifier
 
         private static bool ExcludedFromChecks(string path)
         {
-            /*string index = @"install.wim\3\";
+            string index = @"install.wim\3\";
 
             if (!path.Contains(index, StringComparison.InvariantCultureIgnoreCase))
-                return true;*/
+                return true;
 
             if (path.Contains(@"\.rsrc\"))
             {

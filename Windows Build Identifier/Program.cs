@@ -21,7 +21,11 @@
  */
 
 using CommandLine;
+using DiscUtils.Iso9660;
+using DiscUtils.Udf;
+using DiscUtils.Vfs;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -109,30 +113,135 @@ namespace WindowsBuildIdentifier
             public bool Deep { get; set; }
         }
 
+        [Verb("rename", HelpText = "Rename a build from a media file.")]
+        public class RenameOptions
+        {
+            [Option('m', "media", Required = true, HelpText = "The media file to work on.")]
+            public string Media { get; set; }
+
+            [Option('w', "windows-index", Required = true, HelpText = "The path of the windows index file.")]
+            public string WindowsIndex { get; set; }
+        }
+
         static int Main(string[] args)
         {
-            return CommandLine.Parser.Default.ParseArguments<DiffOptions, IdentifyOptions, IndexOptions>(args)
+            return CommandLine.Parser.Default.ParseArguments<DiffOptions, IdentifyOptions, IndexOptions, RenameOptions>(args)
             .MapResult(
               (DiffOptions opts) => RunAddAndReturnExitCode(opts),
               (IdentifyOptions opts) => RunCommitAndReturnExitCode(opts),
               (IndexOptions opts) => RunCloneAndReturnExitCode(opts),
+              (RenameOptions opts) => RunCloneAndReturnExitCode(opts),
               errs => 1);
+        }
+
+        private static int RunCloneAndReturnExitCode(RenameOptions opts)
+        {
+            PrintBanner();
+
+            Console.WriteLine("Input xml file: " + opts.WindowsIndex);
+
+            Console.WriteLine("Input media: " + opts.Media);
+
+            XmlSerializer deserializer = new XmlSerializer(typeof(WindowsImageIndex[]));
+            TextReader reader = new StreamReader(opts.WindowsIndex);
+            object obj = deserializer.Deserialize(reader);
+            WindowsImageIndex[] XmlData = (WindowsImageIndex[])obj;
+            reader.Close();
+
+            var f = XmlData[0].WindowsImage;
+
+            Common.DisplayReport(f);
+
+            var buildtag = $"{f.MajorVersion}.{f.MinorVersion}.{f.BuildNumber}.{f.MinorVersion}";
+
+            if (!string.IsNullOrEmpty(f.BranchName))
+            {
+                buildtag += $".{f.BranchName}.{f.CompileDate}";
+            }
+
+            var types = f.Types;
+            var licensings = new HashSet<Licensing> { f.Licensing };
+            var languages = f.LanguageCodes.ToHashSet();
+            var skus = new HashSet<string> { f.Sku };
+
+            for (int i = 1; i < XmlData.Length; i++)
+            {
+                var d = XmlData[i].WindowsImage;
+                Common.DisplayReport(d);
+
+                types = types.Union(d.Types).ToHashSet();
+                if (!licensings.Contains(d.Licensing))
+                {
+                    licensings.Add(d.Licensing);
+                }
+                languages = languages.Union(d.LanguageCodes).ToHashSet();
+                if (!skus.Contains(d.Sku))
+                {
+                    skus.Add(d.Sku);
+                }
+            }
+
+            Console.WriteLine($"Build tag: {buildtag}");
+            Console.WriteLine();
+
+            var filename = $"{buildtag}_{f.Architecture}{f.BuildType}_{string.Join("-", types)}-{string.Join("-", skus)}_{string.Join("-", licensings)}_{string.Join("-", languages)}";
+            filename = filename.ToLower();
+
+            var fileextension = opts.Media.Split(@".")[^1];
+            string label = "";
+
+            if (fileextension == "iso" || fileextension == "mdf")
+            {
+                DiscUtils.Complete.SetupHelper.SetupComplete();
+
+                try
+                {
+                    using FileStream isoStream = File.Open(opts.Media, FileMode.Open, FileAccess.Read);
+
+                    VfsFileSystemFacade cd = new CDReader(isoStream, true);
+                    if (cd.FileExists(@"README.TXT"))
+                    {
+                        cd = new UdfReader(isoStream);
+                    }
+
+                    label = cd.VolumeLabel;
+                }
+                catch { };
+            }
+
+            var dst = filename + "." + fileextension;
+            if (!string.IsNullOrEmpty(label))
+                dst = filename + "-" + label + "." + fileextension;
+
+            dst = string.Join(@"\", opts.Media.Split(@"\")[0..^1]) + @"\" + dst;
+
+            Console.WriteLine($"Target filename: {dst}");
+            Console.WriteLine();
+
+            if (opts.Media == dst)
+            {
+                Console.WriteLine("Nothing to do, file name is already good");
+            }
+            else
+            {
+                Console.WriteLine("Renaming");
+                File.Move(opts.Media, dst);
+            }
+
+            Console.WriteLine("Done.");
+
+#if DEBUG
+            if (Debugger.IsAttached)
+            {
+                Console.ReadLine();
+            }
+#endif
+            return 0;
         }
 
         private static int RunCloneAndReturnExitCode(IndexOptions opts)
         {
-            Console.WriteLine();
-            Console.WriteLine("Release Identifier Tool");
-            Console.WriteLine("BetaArchive Release Database Indexing Toolset");
-            Console.WriteLine("BetaArchive (c) 2008-2020");
-            Console.WriteLine("Gustave Monce (@gus33000) (c) 2009-2020");
-            Console.WriteLine();
-
-            var ogcolor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Pre-release version. For evaluation purposes only.");
-            Console.ForegroundColor = ogcolor;
-            Console.WriteLine();
+            PrintBanner();
 
             DiscUtils.Complete.SetupHelper.SetupComplete();
 
@@ -153,7 +262,7 @@ namespace WindowsBuildIdentifier
                     }
                 case "iso":
                     {
-                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromISO(file, opts.Deep);
+                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromISO(file, opts.Deep, true);
 
                         XmlSerializer xsSubmit = new XmlSerializer(typeof(FileItem[]));
                         var xml = "";
@@ -179,7 +288,7 @@ namespace WindowsBuildIdentifier
                     }
                 case "mdf":
                     {
-                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromMDF(file, opts.Deep);
+                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromMDF(file, opts.Deep, true);
 
                         XmlSerializer xsSubmit = new XmlSerializer(typeof(FileItem[]));
                         var xml = "";
@@ -215,7 +324,7 @@ namespace WindowsBuildIdentifier
                 case "wim":
                 case "esd":
                     {
-                        Identification.MediaHandler.IdentifyWindowsFromWIM(new FileStream(file, FileMode.Open, FileAccess.Read));
+                        Identification.MediaHandler.IdentifyWindowsFromWIM(new FileStream(file, FileMode.Open, FileAccess.Read), true);
                         break;
                     }
             }
@@ -233,18 +342,7 @@ namespace WindowsBuildIdentifier
 
         private static int RunCommitAndReturnExitCode(IdentifyOptions opts)
         {
-            Console.WriteLine();
-            Console.WriteLine("Release Identifier Tool");
-            Console.WriteLine("BetaArchive Release Database Indexing Toolset");
-            Console.WriteLine("BetaArchive (c) 2008-2020");
-            Console.WriteLine("Gustave Monce (@gus33000) (c) 2009-2020");
-            Console.WriteLine();
-
-            var ogcolor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Pre-release version. For evaluation purposes only.");
-            Console.ForegroundColor = ogcolor;
-            Console.WriteLine();
+            PrintBanner();
 
             DiscUtils.Complete.SetupHelper.SetupComplete();
 
@@ -265,7 +363,7 @@ namespace WindowsBuildIdentifier
                     }
                 case "iso":
                     {
-                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromISO(file, false);
+                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromISO(file, false, false);
 
                         if (result.Any(x => x.Location.ToLower() == @"\sources\install.wim"))
                         {
@@ -321,7 +419,7 @@ namespace WindowsBuildIdentifier
                     }
                 case "mdf":
                     {
-                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromMDF(file, false);
+                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromMDF(file, false, false);
 
                         if (result.Any(x => x.Location.ToLower() == @"\sources\install.wim"))
                         {
@@ -388,7 +486,27 @@ namespace WindowsBuildIdentifier
                 case "wim":
                 case "esd":
                     {
-                        Identification.MediaHandler.IdentifyWindowsFromWIM(new FileStream(file, FileMode.Open, FileAccess.Read));
+                        var wimindexes = Identification.MediaHandler.IdentifyWindowsFromWIM(new FileStream(file, FileMode.Open, FileAccess.Read), false);
+                        
+                        XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
+                        string xml = "";
+
+                        using (var sww = new StringWriter())
+                        {
+                            XmlWriterSettings settings = new XmlWriterSettings();
+                            settings.Indent = true;
+                            settings.IndentChars = "     ";
+                            settings.NewLineOnAttributes = false;
+                            settings.OmitXmlDeclaration = true;
+
+                            using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                            {
+                                xsSubmit.Serialize(writer, wimindexes);
+                                xml = sww.ToString();
+                            }
+                        }
+
+                        File.WriteAllText(opts.Output, xml);
                         break;
                     }
             }
@@ -404,21 +522,18 @@ namespace WindowsBuildIdentifier
             return 0;
         }
 
-        private static int RunAddAndReturnExitCode(DiffOptions opts)
+        private static void PrintBanner()
         {
             Console.WriteLine();
             Console.WriteLine("Release Identifier Tool");
-            Console.WriteLine("BetaArchive Release Database Indexing Toolset");
-            Console.WriteLine("BetaArchive (c) 2008-2020");
+            Console.WriteLine("Release Database Indexing Toolset");
             Console.WriteLine("Gustave Monce (@gus33000) (c) 2009-2020");
             Console.WriteLine();
+        }
 
-            var ogcolor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Pre-release version. For evaluation purposes only.");
-            Console.ForegroundColor = ogcolor;
-            Console.WriteLine();
-
+        private static int RunAddAndReturnExitCode(DiffOptions opts)
+        {
+            PrintBanner();
             Comparer.CompareBuilds(opts.Index1, opts.Index2);
 
             Console.WriteLine("Done.");
