@@ -186,14 +186,19 @@ namespace WindowsBuildIdentifier.Identification
                 imageIndex.Name = image.NAME;
                 imageIndex.Description = image.DESCRIPTION;
 
-                var creationtime = Convert.ToInt32(image.CREATIONTIME.HIGHPART, 16) * 4294967296 + Convert.ToInt32(image.CREATIONTIME.LOWPART, 16);
-                var lastmodifiedtime = Convert.ToInt32(image.LASTMODIFICATIONTIME.HIGHPART, 16) * 4294967296 + Convert.ToInt32(image.LASTMODIFICATIONTIME.LOWPART, 16);
+                if (image.CREATIONTIME != null)
+                {
+                    var creationtime = Convert.ToInt32(image.CREATIONTIME.HIGHPART, 16) * 4294967296 + Convert.ToInt32(image.CREATIONTIME.LOWPART, 16);
+                    var cTime = DateTime.FromFileTimeUtc(creationtime);
+                    imageIndex.CreationTime = cTime.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                }
 
-                var cTime = DateTime.FromFileTimeUtc(creationtime);
-                var lTime = DateTime.FromFileTimeUtc(lastmodifiedtime);
-
-                imageIndex.CreationTime = cTime.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                imageIndex.LastModifiedTime = lTime.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                if (image.LASTMODIFICATIONTIME != null)
+                {
+                    var creationtime = Convert.ToInt32(image.LASTMODIFICATIONTIME.HIGHPART, 16) * 4294967296 + Convert.ToInt32(image.LASTMODIFICATIONTIME.LOWPART, 16);
+                    var cTime = DateTime.FromFileTimeUtc(creationtime);
+                    imageIndex.LastModifiedTime = cTime.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                }
 
                 imageIndex.WindowsImage = report;
 
@@ -237,7 +242,7 @@ namespace WindowsBuildIdentifier.Identification
             Common.DisplayReport(report);
         }
 
-        private static FileItem[] HandleFacade(IFileSystem facade, bool Recursivity = false)
+        private static FileItem[] HandleFacade(IFileSystem facade, bool Recursivity = true)
         {
             HashSet<FileItem> result = new HashSet<FileItem>();
 
@@ -246,19 +251,22 @@ namespace WindowsBuildIdentifier.Identification
                 // add the root to the array
                 var root = facade.Root;
 
-                FileItem fileItem3 = new FileItem();
-                fileItem3.Location = @"\";
+                if (root != null)
+                {
+                    FileItem fileItem3 = new FileItem();
+                    fileItem3.Location = @"\";
 
-                Console.WriteLine($"Folder: {fileItem3.Location}");
+                    Console.WriteLine($"Folder: {fileItem3.Location}");
 
-                var tmpattribs3 = facade.GetAttributes(fileItem3.Location).ToString();
-                fileItem3.Attributes = tmpattribs3.Split(", ");
+                    var tmpattribs3 = facade.GetAttributes(fileItem3.Location).ToString();
+                    fileItem3.Attributes = tmpattribs3.Split(", ");
 
-                fileItem3.LastAccessTime = root.LastAccessTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                fileItem3.LastWriteTime = root.LastWriteTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                fileItem3.CreationTime = root.CreationTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem3.LastAccessTime = root.LastAccessTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem3.LastWriteTime = root.LastWriteTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                    fileItem3.CreationTime = root.CreationTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
 
-                result.Add(fileItem3);
+                    result.Add(fileItem3);
+                }
                 // end of adding root
 
                 foreach (var item in facade.GetDirectories("", null, SearchOption.AllDirectories))
@@ -382,28 +390,18 @@ namespace WindowsBuildIdentifier.Identification
                                     try
                                     {
                                         using var wimstrm = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
-                                        var wimparsed = new DiscUtils.Wim.WimFile(wimstrm);
+                                        using var arch = new ArchiveFile(wimstrm, SevenZipFormat.Wim);
+                                        var wimparsed = new ArchiveBridge(arch);
 
-                                        for (int i = 0; i < wimparsed.ImageCount; i++)
+                                        var res = HandleFacade(wimparsed);
+
+                                        var res2 = res.Select(x =>
                                         {
-                                            try
-                                            {
-                                                var image = wimparsed.GetImage(i);
-                                                var res = HandleFacade(image);
+                                            x.Location = fileItem.Location + @"\" + x.Location;
+                                            return x;
+                                        });
 
-                                                var res2 = res.Select(x =>
-                                                {
-                                                    x.Location = fileItem.Location + @$"\{i}\" + x.Location;
-                                                    return x;
-                                                });
-
-                                                result = result.Concat(res2).ToHashSet();
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                Console.WriteLine(ex.ToString());
-                                            }
-                                        }
+                                        result = result.Concat(res2).ToHashSet();
                                     }
                                     catch (Exception ex)
                                     {

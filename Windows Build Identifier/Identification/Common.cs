@@ -95,6 +95,11 @@ namespace WindowsBuildIdentifier.Identification
 
         public static WindowsVersion GetGreaterVersion(WindowsVersion version1, WindowsVersion version2)
         {
+            if (version1 == null)
+                return version2;
+            if (version2 == null)
+                return version1;
+
             if (version1.MajorVersion != version2.MajorVersion)
             {
                 if (version1.MajorVersion > version2.MajorVersion)

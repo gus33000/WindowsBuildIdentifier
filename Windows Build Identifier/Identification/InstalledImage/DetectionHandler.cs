@@ -155,22 +155,27 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             }
             #endregion
 
-            File.Delete(softwareHivePath);
-            File.Delete(systemHivePath);
+            if (!string.IsNullOrEmpty(softwareHivePath))
+                File.Delete(softwareHivePath);
+            if (!string.IsNullOrEmpty(systemHivePath))
+                File.Delete(systemHivePath);
 
-            if (report.BuildNumber > 2195)
+            if (!string.IsNullOrEmpty(report.Sku))
             {
-                if (report.Sku.Equals("personal", StringComparison.InvariantCultureIgnoreCase))
+                if (report.BuildNumber > 2195)
                 {
-                    report.Sku = "Home";
+                    if (report.Sku.Equals("personal", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        report.Sku = "Home";
+                    }
                 }
-            }
 
-            if (report.BuildNumber >= 1911)
-            {
-                if (report.Sku.Equals("workstation", StringComparison.InvariantCultureIgnoreCase))
+                if (report.BuildNumber >= 1911)
                 {
-                    report.Sku = "Professional";
+                    if (report.Sku.Equals("workstation", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        report.Sku = "Professional";
+                    }
                 }
             }
 

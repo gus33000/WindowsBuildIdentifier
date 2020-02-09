@@ -213,6 +213,11 @@ namespace SevenZipExtractor
             return GetPropertySafe<string>(ItemPropId.kpidComment);
         }
 
+        public long GetArchiveSize()
+        {
+            return (long)GetPropertySafe<ulong>(ItemPropId.kpidSize);
+        }
+
         private T GetPropertySafe<T>(ItemPropId name)
         {
             try
