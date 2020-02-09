@@ -88,28 +88,6 @@ namespace WindowsBuildIdentifier
 
             DiscUtils.Complete.SetupHelper.SetupComplete();
 
-            /*HashSet<OpticalDiscMedia> results = new HashSet<OpticalDiscMedia>();
-
-            foreach (var isopath in Directory.GetFiles(args[0], "*.iso", SearchOption.AllDirectories))
-            {
-                results.Add(Identification.MediaHandler.IdentifyWindowsFromISO(isopath));
-            }
-
-            XmlSerializer xsSubmit = new XmlSerializer(typeof(HashSet<OpticalDiscMedia>));
-            var xml = "";
-
-            using (var sww = new StringWriter())
-            {
-                using (XmlWriter writer = XmlWriter.Create(sww))
-                {
-                    xsSubmit.Serialize(writer, results);
-                    xml = sww.ToString();
-                }
-            }
-
-            File.WriteAllText(@"G:\output_builds_5.xml", xml);
-            */
-
             var file = args[0];
             var extension = file.Split(".")[^1];
 
@@ -147,7 +125,7 @@ namespace WindowsBuildIdentifier
                             }
                         }
 
-                        File.WriteAllText(args[1] + @"\" + "media_index.xml", xml);
+                        File.WriteAllText(args[1] + @"\" + "meta_index.xml", xml);
 
                         if (result.Any(x => x.Location.ToLower() == @"\sources\install.wim"))
                         {
@@ -171,7 +149,7 @@ namespace WindowsBuildIdentifier
                                 }
                             }
 
-                            File.WriteAllText(args[1] + @"\" + "media_windows_image.xml", xml);
+                            File.WriteAllText(args[1] + @"\" + "meta_windows_image.xml", xml);
                         }
 
                         break;
