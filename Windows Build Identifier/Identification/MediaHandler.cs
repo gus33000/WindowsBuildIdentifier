@@ -242,7 +242,7 @@ namespace WindowsBuildIdentifier.Identification
             Common.DisplayReport(report);
         }
 
-        private static FileItem[] HandleFacade(IFileSystem facade, bool Recursivity = true)
+        private static FileItem[] HandleFacade(IFileSystem facade, bool Recursivity = false)
         {
             HashSet<FileItem> result = new HashSet<FileItem>();
 
@@ -506,7 +506,7 @@ namespace WindowsBuildIdentifier.Identification
             return result.OrderBy(x => x.Location).ToArray();
         }
 
-        public static FileItem[] IdentifyWindowsFromISO(string isopath)
+        public static FileItem[] IdentifyWindowsFromISO(string isopath, bool deep)
         {
             FileItem[] result = new FileItem[0];
 
@@ -524,7 +524,7 @@ namespace WindowsBuildIdentifier.Identification
                     cd = new UdfReader(isoStream);
                 }
 
-                result = HandleFacade(cd);
+                result = HandleFacade(cd, deep);
             }
             catch (Exception ex)
             {
@@ -535,7 +535,7 @@ namespace WindowsBuildIdentifier.Identification
             return result;
         }
 
-        public static FileItem[] IdentifyWindowsFromMDF(string isopath)
+        public static FileItem[] IdentifyWindowsFromMDF(string isopath, bool deep)
         {
             FileItem[] result = new FileItem[0];
 
@@ -553,7 +553,7 @@ namespace WindowsBuildIdentifier.Identification
                     cd = new UdfReader(isoStream);
                 }
 
-                result = HandleFacade(cd);
+                result = HandleFacade(cd, deep);
             }
             catch (Exception ex)
             {

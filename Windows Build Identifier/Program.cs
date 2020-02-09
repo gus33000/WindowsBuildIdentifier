@@ -20,6 +20,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+using CommandLine;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -75,7 +76,40 @@ namespace WindowsBuildIdentifier
 
     internal class Program
     {
-        static void Main(string[] args)
+        [Verb("diff", HelpText = "Diff two builds based on their meta_index.xml files. Note: index files must have been generated with the Deep option.")]
+        public class DiffOptions
+        {
+            [Option('i', "index-1", Required = true, HelpText = "The media index file number 1.")]
+            public string Index1 { get; set; }
+
+            [Option('j', "index-2", Required = true, HelpText = "The media index file number 2.")]
+            public string Index2 { get; set; }
+        }
+
+        [Verb("identify", HelpText = "Identify a build from a media file.")]
+        public class IdentifyOptions
+        {
+            [Option('m', "media", Required = true, HelpText = "The media file to work on.")]
+            public string Media { get; set; }
+
+            [Option('o', "output", Required = true, HelpText = "The destination path for the windows index file.")]
+            public string Output { get; set; }
+        }
+
+        [Verb("index", HelpText = "Index a build from a media file.")]
+        public class IndexOptions
+        {
+            [Option('m', "media", Required = true, HelpText = "The media file to work on.")]
+            public string Media { get; set; }
+
+            [Option('o', "output", Required = true, HelpText = "The destination path for the index file.")]
+            public string Output { get; set; }
+
+            [Option('d', "deep", Required = false, Default = false, HelpText = "Perform a deep scan. A deep scan will recursively index files inside of various recognized container types such as wims, isos and etc...")]
+            public bool Deep { get; set; }
+        }
+
+        static int Main(string[] args)
         {
             Console.WriteLine();
             Console.WriteLine("Release Identifier Tool");
@@ -90,16 +124,19 @@ namespace WindowsBuildIdentifier
             Console.ForegroundColor = ogcolor;
             Console.WriteLine();
 
-            if (args.Length < 2)
-            {
-                Console.WriteLine("Usage: <Path to file to analyze> <Path to output xml file>");
-                Console.WriteLine();
-                return;
-            }
-
             DiscUtils.Complete.SetupHelper.SetupComplete();
 
-            var file = args[0];
+            return CommandLine.Parser.Default.ParseArguments<DiffOptions, IdentifyOptions, IndexOptions>(args)
+            .MapResult(
+              (DiffOptions opts) => RunAddAndReturnExitCode(opts),
+              (IdentifyOptions opts) => RunCommitAndReturnExitCode(opts),
+              (IndexOptions opts) => RunCloneAndReturnExitCode(opts),
+              errs => 1);
+        }
+
+        private static int RunCloneAndReturnExitCode(IndexOptions opts)
+        {
+            var file = opts.Media;
             var extension = file.Split(".")[^1];
 
             switch (extension.ToLower())
@@ -116,7 +153,7 @@ namespace WindowsBuildIdentifier
                     }
                 case "iso":
                     {
-                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromISO(file);
+                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromISO(file, opts.Deep);
 
                         XmlSerializer xsSubmit = new XmlSerializer(typeof(FileItem[]));
                         var xml = "";
@@ -136,38 +173,13 @@ namespace WindowsBuildIdentifier
                             }
                         }
 
-                        File.WriteAllText(args[1] + @"\" + "meta_index.xml", xml);
-
-                        if (result.Any(x => x.Location.ToLower() == @"\sources\install.wim"))
-                        {
-                            var wimtag = result.First(x => x.Location.ToLower() == @"\sources\install.wim");
-
-                            xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
-                            xml = "";
-
-                            using (var sww = new StringWriter())
-                            {
-                                XmlWriterSettings settings = new XmlWriterSettings();
-                                settings.Indent = true;
-                                settings.IndentChars = "     ";
-                                settings.NewLineOnAttributes = false;
-                                settings.OmitXmlDeclaration = true;
-
-                                using (XmlWriter writer = XmlWriter.Create(sww, settings))
-                                {
-                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
-                                    xml = sww.ToString();
-                                }
-                            }
-
-                            File.WriteAllText(args[1] + @"\" + "meta_windows_image.xml", xml);
-                        }
+                        File.WriteAllText(opts.Output, xml);
 
                         break;
                     }
                 case "mdf":
                     {
-                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromMDF(file);
+                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromMDF(file, opts.Deep);
 
                         XmlSerializer xsSubmit = new XmlSerializer(typeof(FileItem[]));
                         var xml = "";
@@ -186,7 +198,7 @@ namespace WindowsBuildIdentifier
                             }
                         }
 
-                        File.WriteAllText(args[1], xml);
+                        File.WriteAllText(opts.Output, xml);
 
                         break;
                     }
@@ -216,6 +228,180 @@ namespace WindowsBuildIdentifier
                 Console.ReadLine();
             }
 #endif
+            return 0;
+        }
+
+        private static int RunCommitAndReturnExitCode(IdentifyOptions opts)
+        {
+            var file = opts.Media;
+            var extension = file.Split(".")[^1];
+
+            switch (extension.ToLower())
+            {
+                case "vhd":
+                    {
+                        Identification.MediaHandler.IdentifyWindowsFromVHD(file);
+                        break;
+                    }
+                case "vhdx":
+                    {
+                        Identification.MediaHandler.IdentifyWindowsFromVHDX(file);
+                        break;
+                    }
+                case "iso":
+                    {
+                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromISO(file, false);
+
+                        if (result.Any(x => x.Location.ToLower() == @"\sources\install.wim"))
+                        {
+                            var wimtag = result.First(x => x.Location.ToLower() == @"\sources\install.wim");
+
+                            XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
+                            string xml = "";
+
+                            using (var sww = new StringWriter())
+                            {
+                                XmlWriterSettings settings = new XmlWriterSettings();
+                                settings.Indent = true;
+                                settings.IndentChars = "     ";
+                                settings.NewLineOnAttributes = false;
+                                settings.OmitXmlDeclaration = true;
+
+                                using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                                {
+                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xml = sww.ToString();
+                                }
+                            }
+
+                            File.WriteAllText(opts.Output, xml);
+                        }
+
+                        if (result.Any(x => x.Location.ToLower() == @"\sources\install.esd"))
+                        {
+                            var wimtag = result.First(x => x.Location.ToLower() == @"\sources\install.esd");
+
+                            XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
+                            string xml = "";
+
+                            using (var sww = new StringWriter())
+                            {
+                                XmlWriterSettings settings = new XmlWriterSettings();
+                                settings.Indent = true;
+                                settings.IndentChars = "     ";
+                                settings.NewLineOnAttributes = false;
+                                settings.OmitXmlDeclaration = true;
+
+                                using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                                {
+                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xml = sww.ToString();
+                                }
+                            }
+
+                            File.WriteAllText(opts.Output, xml);
+                        }
+
+                        break;
+                    }
+                case "mdf":
+                    {
+                        FileItem[] result = Identification.MediaHandler.IdentifyWindowsFromMDF(file, false);
+
+                        if (result.Any(x => x.Location.ToLower() == @"\sources\install.wim"))
+                        {
+                            var wimtag = result.First(x => x.Location.ToLower() == @"\sources\install.wim");
+
+                            XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
+                            string xml = "";
+
+                            using (var sww = new StringWriter())
+                            {
+                                XmlWriterSettings settings = new XmlWriterSettings();
+                                settings.Indent = true;
+                                settings.IndentChars = "     ";
+                                settings.NewLineOnAttributes = false;
+                                settings.OmitXmlDeclaration = true;
+
+                                using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                                {
+                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xml = sww.ToString();
+                                }
+                            }
+
+                            File.WriteAllText(opts.Output, xml);
+                        }
+
+                        if (result.Any(x => x.Location.ToLower() == @"\sources\install.esd"))
+                        {
+                            var wimtag = result.First(x => x.Location.ToLower() == @"\sources\install.esd");
+
+                            XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
+                            string xml = "";
+
+                            using (var sww = new StringWriter())
+                            {
+                                XmlWriterSettings settings = new XmlWriterSettings();
+                                settings.Indent = true;
+                                settings.IndentChars = "     ";
+                                settings.NewLineOnAttributes = false;
+                                settings.OmitXmlDeclaration = true;
+
+                                using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                                {
+                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xml = sww.ToString();
+                                }
+                            }
+
+                            File.WriteAllText(opts.Output, xml);
+                        }
+
+                        break;
+                    }
+                case "vmdk":
+                    {
+                        Identification.MediaHandler.IdentifyWindowsFromVMDK(file);
+                        break;
+                    }
+                case "vdi":
+                    {
+                        Identification.MediaHandler.IdentifyWindowsFromVDI(file);
+                        break;
+                    }
+                case "wim":
+                case "esd":
+                    {
+                        Identification.MediaHandler.IdentifyWindowsFromWIM(new FileStream(file, FileMode.Open, FileAccess.Read));
+                        break;
+                    }
+            }
+
+            Console.WriteLine("Done.");
+
+#if DEBUG
+            if (Debugger.IsAttached)
+            {
+                Console.ReadLine();
+            }
+#endif
+            return 0;
+        }
+
+        private static int RunAddAndReturnExitCode(DiffOptions opts)
+        {
+            Comparer.CompareBuilds(opts.Index1, opts.Index2);
+
+            Console.WriteLine("Done.");
+
+#if DEBUG
+            if (Debugger.IsAttached)
+            {
+                Console.ReadLine();
+            }
+#endif
+            return 0;
         }
     }
 }
