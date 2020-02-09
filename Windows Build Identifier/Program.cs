@@ -42,12 +42,23 @@ namespace WindowsBuildIdentifier
 
         public string Size;
 
+        public Version Version;
+
         public string[] Attributes;
 
-        public string ProductVersion;
-        public string VersionInfo;
-
         public MetaData Metadata;
+    }
+
+    public class Version
+    {
+        public string CompanyName;
+        public string FileDescription;
+        public string FileVersion;
+        public string InternalName;
+        public string LegalCopyright;
+        public string OriginalFilename;
+        public string ProductName;
+        public string ProductVersion;
     }
 
     public class Hash

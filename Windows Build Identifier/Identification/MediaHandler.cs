@@ -352,25 +352,49 @@ namespace WindowsBuildIdentifier.Identification
 
                                         memread.Seek(0, SeekOrigin.Begin);
 
-                                        using TextReader tr = new StreamReader(memread);
+                                        using TextReader tr = new StreamReader(memread, Encoding.Unicode);
+
+                                        fileItem.Version = new Version();
 
                                         var ln = tr.ReadLine();
                                         while (ln != null)
                                         {
                                             var line = ln.Replace("\0", "");
-                                            if (line.Contains("VALUE \"ProductVersion\","))
+                                            if (line.Contains("VALUE \"CompanyName\","))
                                             {
-                                                fileItem.ProductVersion = line.Split("\"")[^2];
+                                                fileItem.Version.CompanyName = line.Split("\"")[^2];
+                                            }
+                                            else if (line.Contains("VALUE \"FileDescription\","))
+                                            {
+                                                fileItem.Version.FileDescription = line.Split("\"")[^2];
                                             }
                                             else if (line.Contains("VALUE \"FileVersion\","))
                                             {
-                                                fileItem.VersionInfo = line.Split("\"")[^2];
+                                                fileItem.Version.FileVersion = line.Split("\"")[^2];
+                                            }
+                                            else if (line.Contains("VALUE \"InternalName\","))
+                                            {
+                                                fileItem.Version.InternalName = line.Split("\"")[^2];
+                                            }
+                                            else if (line.Contains("VALUE \"LegalCopyright\","))
+                                            {
+                                                fileItem.Version.LegalCopyright = line.Split("\"")[^2];
+                                            }
+                                            else if (line.Contains("VALUE \"OriginalFilename\","))
+                                            {
+                                                fileItem.Version.OriginalFilename = line.Split("\"")[^2];
+                                            }
+                                            else if (line.Contains("VALUE \"ProductName\","))
+                                            {
+                                                fileItem.Version.ProductName = line.Split("\"")[^2];
+                                            }
+                                            else if (line.Contains("VALUE \"ProductVersion\","))
+                                            {
+                                                fileItem.Version.ProductVersion = line.Split("\"")[^2];
                                             }
 
                                             ln = tr.ReadLine();
                                         }
-
-                                        Console.WriteLine(fileItem.VersionInfo);
                                     }
                                 }
                                 catch { };
@@ -394,6 +418,35 @@ namespace WindowsBuildIdentifier.Identification
                                         var wimparsed = new ArchiveBridge(arch);
 
                                         var res = HandleFacade(wimparsed);
+
+                                        var res2 = res.Select(x =>
+                                        {
+                                            x.Location = fileItem.Location + @"\" + x.Location;
+                                            return x;
+                                        });
+
+                                        result = result.Concat(res2).ToHashSet();
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine(ex.ToString());
+                                    }
+                                    break;
+                                }
+
+                            case "mui":
+                            case "dll":
+                            case "sys":
+                            case "exe":
+                            case "efi":
+                                {
+                                    try
+                                    {
+                                        using var pestrm = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
+                                        using var arch = new ArchiveFile(pestrm, SevenZipFormat.PE);
+                                        var peparsed = new ArchiveBridge(arch);
+
+                                        var res = HandleFacade(peparsed);
 
                                         var res2 = res.Select(x =>
                                         {
