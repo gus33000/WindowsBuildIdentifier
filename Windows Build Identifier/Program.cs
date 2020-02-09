@@ -111,6 +111,16 @@ namespace WindowsBuildIdentifier
 
         static int Main(string[] args)
         {
+            return CommandLine.Parser.Default.ParseArguments<DiffOptions, IdentifyOptions, IndexOptions>(args)
+            .MapResult(
+              (DiffOptions opts) => RunAddAndReturnExitCode(opts),
+              (IdentifyOptions opts) => RunCommitAndReturnExitCode(opts),
+              (IndexOptions opts) => RunCloneAndReturnExitCode(opts),
+              errs => 1);
+        }
+
+        private static int RunCloneAndReturnExitCode(IndexOptions opts)
+        {
             Console.WriteLine();
             Console.WriteLine("Release Identifier Tool");
             Console.WriteLine("BetaArchive Release Database Indexing Toolset");
@@ -126,16 +136,6 @@ namespace WindowsBuildIdentifier
 
             DiscUtils.Complete.SetupHelper.SetupComplete();
 
-            return CommandLine.Parser.Default.ParseArguments<DiffOptions, IdentifyOptions, IndexOptions>(args)
-            .MapResult(
-              (DiffOptions opts) => RunAddAndReturnExitCode(opts),
-              (IdentifyOptions opts) => RunCommitAndReturnExitCode(opts),
-              (IndexOptions opts) => RunCloneAndReturnExitCode(opts),
-              errs => 1);
-        }
-
-        private static int RunCloneAndReturnExitCode(IndexOptions opts)
-        {
             var file = opts.Media;
             var extension = file.Split(".")[^1];
 
@@ -233,6 +233,21 @@ namespace WindowsBuildIdentifier
 
         private static int RunCommitAndReturnExitCode(IdentifyOptions opts)
         {
+            Console.WriteLine();
+            Console.WriteLine("Release Identifier Tool");
+            Console.WriteLine("BetaArchive Release Database Indexing Toolset");
+            Console.WriteLine("BetaArchive (c) 2008-2020");
+            Console.WriteLine("Gustave Monce (@gus33000) (c) 2009-2020");
+            Console.WriteLine();
+
+            var ogcolor = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Pre-release version. For evaluation purposes only.");
+            Console.ForegroundColor = ogcolor;
+            Console.WriteLine();
+
+            DiscUtils.Complete.SetupHelper.SetupComplete();
+
             var file = opts.Media;
             var extension = file.Split(".")[^1];
 
@@ -391,6 +406,19 @@ namespace WindowsBuildIdentifier
 
         private static int RunAddAndReturnExitCode(DiffOptions opts)
         {
+            Console.WriteLine();
+            Console.WriteLine("Release Identifier Tool");
+            Console.WriteLine("BetaArchive Release Database Indexing Toolset");
+            Console.WriteLine("BetaArchive (c) 2008-2020");
+            Console.WriteLine("Gustave Monce (@gus33000) (c) 2009-2020");
+            Console.WriteLine();
+
+            var ogcolor = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("Pre-release version. For evaluation purposes only.");
+            Console.ForegroundColor = ogcolor;
+            Console.WriteLine();
+
             Comparer.CompareBuilds(opts.Index1, opts.Index2);
 
             Console.WriteLine("Done.");
