@@ -103,12 +103,15 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
             WindowsVersion correctVersion = Common.GetGreaterVersion(info.version, info2.version);
 
-            report.MajorVersion = correctVersion.MajorVersion;
-            report.MinorVersion = correctVersion.MinorVersion;
-            report.BuildNumber = correctVersion.BuildNumber;
-            report.DeltaVersion = correctVersion.DeltaVersion;
-            report.BranchName = correctVersion.BranchName;
-            report.CompileDate = correctVersion.CompileDate;
+            if (correctVersion != null)
+            {
+                report.MajorVersion = correctVersion.MajorVersion;
+                report.MinorVersion = correctVersion.MinorVersion;
+                report.BuildNumber = correctVersion.BuildNumber;
+                report.DeltaVersion = correctVersion.DeltaVersion;
+                report.BranchName = correctVersion.BranchName;
+                report.CompileDate = correctVersion.CompileDate;
+            }
             #endregion
 
             #region Edition Gathering
@@ -272,29 +275,40 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 {
                     DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
 
-                    var prodpol = (byte[])subkey.GetValue("ProductPolicy");
-
-                    var policies = Common.ParseProductPolicy(prodpol);
-
-                    if (policies.Any(x => x.Name == "Kernel-ProductInfo"))
+                    if (subkey.GetValue("SubscriptionPfnList") != null)
                     {
-                        var pol = policies.First(x => x.Name == "Kernel-ProductInfo");
+                        var pfn = ((string[])subkey.GetValue("SubscriptionPfnList"))[0];
+                        var product = pfn.Split(".")[2];
+                        product = product.Replace("Pro", "Professional");
+                        sku = product;
+                        Console.WriteLine("Effective SKU: " + sku);
+                    }
+                    else
+                    {
+                        var prodpol = (byte[])subkey.GetValue("ProductPolicy");
 
-                        if (pol.Type == 4)
+                        var policies = Common.ParseProductPolicy(prodpol);
+
+                        if (policies.Any(x => x.Name == "Kernel-ProductInfo"))
                         {
-                            int product = BitConverter.ToInt32(pol.Data);
-                            Console.WriteLine("Detected product id: " + product);
+                            var pol = policies.First(x => x.Name == "Kernel-ProductInfo");
 
-                            if (Enum.IsDefined(typeof(Product), product))
+                            if (pol.Type == 4)
                             {
-                                sku = Enum.GetName(typeof(Product), product);
-                            }
-                            else
-                            {
-                                sku = $"UnknownAdditional{product.ToString("X")}";
-                            }
+                                int product = BitConverter.ToInt32(pol.Data);
+                                Console.WriteLine("Detected product id: " + product);
 
-                            Console.WriteLine("Effective SKU: " + sku);
+                                if (Enum.IsDefined(typeof(Product), product))
+                                {
+                                    sku = Enum.GetName(typeof(Product), product);
+                                }
+                                else
+                                {
+                                    sku = $"UnknownAdditional{product.ToString("X")}";
+                                }
+
+                                Console.WriteLine("Effective SKU: " + sku);
+                            }
                         }
                     }
                 }

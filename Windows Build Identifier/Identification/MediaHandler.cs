@@ -147,7 +147,7 @@ namespace WindowsBuildIdentifier.Identification
                 provider.Close();
 
                 // fallback
-                if (string.IsNullOrEmpty(report.Sku) || report.Sku == "TerminalServer")
+                if ((string.IsNullOrEmpty(report.Sku) || report.Sku == "TerminalServer") && !string.IsNullOrEmpty(image.FLAGS))
                 {
                     Console.WriteLine("WARNING: Falling back to WIM XML for edition gathering");
 
