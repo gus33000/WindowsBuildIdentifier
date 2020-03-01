@@ -309,17 +309,30 @@ namespace WindowsBuildIdentifier.Identification
 
                         fileItem.Hash = new Hash();
 
-                        Console.WriteLine("Computing MD5");
-                        var md5hash = new MD5CryptoServiceProvider().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
-                        fileItem.Hash.MD5 = BitConverter.ToString(md5hash).Replace("-", "");
+                        using var file = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
+                        using var md5Prov = MD5.Create();
+                        using var sha1Prov = SHA1.Create();
+                        using var crcProv = new Crc32();
 
-                        Console.WriteLine("Computing SHA1");
-                        var sha1hash = new SHA1CryptoServiceProvider().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
-                        fileItem.Hash.SHA1 = BitConverter.ToString(sha1hash).Replace("-", "");
+                        Console.WriteLine("Computing hashes");
 
-                        Console.WriteLine("Computing CRC32");
-                        var crc32hash = new Crc32().ComputeHash(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read));
-                        fileItem.Hash.CRC32 = BitConverter.ToString(crc32hash).Replace("-", "");
+                        byte[] buffer = new byte[16384];
+                        int bytesRead = 0;
+
+                        while ((bytesRead = file.Read(buffer, 0, buffer.Length)) > 0)
+                        {
+                            md5Prov.TransformBlock(buffer, 0, bytesRead, buffer, 0);
+                            sha1Prov.TransformBlock(buffer, 0, bytesRead, buffer, 0);
+                            crcProv.TransformBlock(buffer, 0, bytesRead, buffer, 0);
+                        }
+
+                        md5Prov.TransformFinalBlock(buffer, 0, 0);
+                        sha1Prov.TransformFinalBlock(buffer, 0, 0);
+                        crcProv.TransformFinalBlock(buffer, 0, 0);
+
+                        fileItem.Hash.MD5 = BitConverter.ToString(md5Prov.Hash).Replace("-", "");
+                        fileItem.Hash.SHA1 = BitConverter.ToString(sha1Prov.Hash).Replace("-", "");
+                        fileItem.Hash.CRC32 = BitConverter.ToString(crcProv.Hash).Replace("-", "");
                     }
 
                     var extension = fileItem.Location.Split(".")[^1];
