@@ -257,7 +257,14 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
             result.Architecture = Common.GetMachineTypeFromFile(new FileStream(kernelPath, FileMode.Open));
 
-            result.version = Common.ParseBuildString(info.FileVersion);
+            var ver = info.FileVersion;
+
+            if (ver.Count(x => x == '.') < 4)
+            {
+                ver = info.FileMajorPart + "." + info.FileMinorPart + "." + info.FileBuildPart + "." + info.FilePrivatePart;
+            }
+
+            result.version = Common.ParseBuildString(ver);
 
             result.BuildType = info.IsDebug ? BuildType.chk : BuildType.fre;
 

@@ -218,6 +218,18 @@ namespace WindowsBuildIdentifier.Identification
             Common.DisplayReport(report);
         }
 
+        private static WindowsImageIndex[] IdentifyWindowsNTFromRootFs(IFileSystem fileSystem)
+        {
+            RootFsInstallProviderInterface provider = new RootFsInstallProviderInterface(fileSystem);
+
+            var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+            Common.DisplayReport(report);
+
+            var index = new WindowsImageIndex() { WindowsImage = report };
+
+            return new WindowsImageIndex[] { index };
+        }
+
         private static void IdentifyWindowsNTFromVDI(Stream vhdstream)
         {
             VDIInstallProviderInterface provider = new VDIInstallProviderInterface(vhdstream);
@@ -351,6 +363,17 @@ namespace WindowsBuildIdentifier.Identification
                                 catch { };
                                 break;
                             }
+                        case "sif":
+                            {
+                                if (fileItem.Location.Contains("txtsetup.sif", StringComparison.InvariantCultureIgnoreCase))
+                                {
+                                    var bridge = new TxtSetupBridge(facade, string.Join("\\", fileItem.Location.Split('\\')[0..^1]));
+                                    var tempIndexes = IdentifyWindowsNTFromRootFs(bridge); 
+                                    fileItem.Metadata = new MetaData();
+                                    fileItem.Metadata.WindowsImageIndexes = tempIndexes;
+                                }
+                                break;
+                            }
                         case "mui":
                         case "dll":
                         case "sys":
@@ -458,7 +481,6 @@ namespace WindowsBuildIdentifier.Identification
                                     }
                                     break;
                                 }
-
                             case "mui":
                             case "dll":
                             case "sys":

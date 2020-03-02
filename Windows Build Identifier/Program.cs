@@ -24,11 +24,14 @@ using CommandLine;
 using DiscUtils.Iso9660;
 using DiscUtils.Udf;
 using DiscUtils.Vfs;
+using IniParser;
+using IniParser.Model;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Serialization;
 using WindowsBuildIdentifier.Identification;
@@ -127,14 +130,14 @@ namespace WindowsBuildIdentifier
         {
             return CommandLine.Parser.Default.ParseArguments<DiffOptions, IdentifyOptions, IndexOptions, RenameOptions>(args)
             .MapResult(
-              (DiffOptions opts) => RunAddAndReturnExitCode(opts),
-              (IdentifyOptions opts) => RunCommitAndReturnExitCode(opts),
-              (IndexOptions opts) => RunCloneAndReturnExitCode(opts),
-              (RenameOptions opts) => RunCloneAndReturnExitCode(opts),
+              (DiffOptions opts) => RunDiffAndReturnExitCode(opts),
+              (IdentifyOptions opts) => RunIdentifyAndReturnExitCode(opts),
+              (IndexOptions opts) => RunIndexAndReturnExitCode(opts),
+              (RenameOptions opts) => RunRenameAndReturnExitCode(opts),
               errs => 1);
         }
 
-        private static int RunCloneAndReturnExitCode(RenameOptions opts)
+        private static int RunRenameAndReturnExitCode(RenameOptions opts)
         {
             PrintBanner();
 
@@ -239,7 +242,7 @@ namespace WindowsBuildIdentifier
             return 0;
         }
 
-        private static int RunCloneAndReturnExitCode(IndexOptions opts)
+        private static int RunIndexAndReturnExitCode(IndexOptions opts)
         {
             PrintBanner();
 
@@ -340,7 +343,7 @@ namespace WindowsBuildIdentifier
             return 0;
         }
 
-        private static int RunCommitAndReturnExitCode(IdentifyOptions opts)
+        private static int RunIdentifyAndReturnExitCode(IdentifyOptions opts)
         {
             PrintBanner();
 
@@ -415,6 +418,31 @@ namespace WindowsBuildIdentifier
                             File.WriteAllText(opts.Output, xml);
                         }
 
+                        if (result.Any(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")))
+                        {
+                            var wimtag = result.First(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif"));
+
+                            XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
+                            string xml = "";
+
+                            using (var sww = new StringWriter())
+                            {
+                                XmlWriterSettings settings = new XmlWriterSettings();
+                                settings.Indent = true;
+                                settings.IndentChars = "     ";
+                                settings.NewLineOnAttributes = false;
+                                settings.OmitXmlDeclaration = true;
+
+                                using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                                {
+                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xml = sww.ToString();
+                                }
+                            }
+
+                            File.WriteAllText(opts.Output, xml);
+                        }
+
                         break;
                     }
                 case "mdf":
@@ -449,6 +477,31 @@ namespace WindowsBuildIdentifier
                         if (result.Any(x => x.Location.ToLower() == @"\sources\install.esd"))
                         {
                             var wimtag = result.First(x => x.Location.ToLower() == @"\sources\install.esd");
+
+                            XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
+                            string xml = "";
+
+                            using (var sww = new StringWriter())
+                            {
+                                XmlWriterSettings settings = new XmlWriterSettings();
+                                settings.Indent = true;
+                                settings.IndentChars = "     ";
+                                settings.NewLineOnAttributes = false;
+                                settings.OmitXmlDeclaration = true;
+
+                                using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                                {
+                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xml = sww.ToString();
+                                }
+                            }
+
+                            File.WriteAllText(opts.Output, xml);
+                        }
+
+                        if (result.Any(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")))
+                        {
+                            var wimtag = result.First(x => x.Location.EndsWith(@"\txtsetup.sif"));
 
                             XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
                             string xml = "";
@@ -531,7 +584,7 @@ namespace WindowsBuildIdentifier
             Console.WriteLine();
         }
 
-        private static int RunAddAndReturnExitCode(DiffOptions opts)
+        private static int RunDiffAndReturnExitCode(DiffOptions opts)
         {
             PrintBanner();
             Comparer.CompareBuilds(opts.Index1, opts.Index2);

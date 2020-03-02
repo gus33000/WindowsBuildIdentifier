@@ -89,6 +89,15 @@ namespace WindowsBuildIdentifier.Identification
                     verinfo.CompileDate = compiledate;
                 }
             }
+            else if (BuildString.Count(x => x == '.') == 3)
+            {
+                var splitver = BuildString.Split('.');
+
+                verinfo.MajorVersion = ulong.Parse(splitver[0]);
+                verinfo.MinorVersion = ulong.Parse(splitver[1]);
+                verinfo.BuildNumber = ulong.Parse(splitver[2]);
+                verinfo.DeltaVersion = ulong.Parse(splitver[3]);
+            }
 
             return verinfo;
         }
