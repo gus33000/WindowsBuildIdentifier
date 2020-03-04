@@ -252,6 +252,7 @@ namespace WindowsBuildIdentifier.Identification
     public enum MachineType : ushort
     {
         unknown = 0x0,
+        axp = 0x184,
         am33 = 0x1d3,
         amd64 = 0x8664,
         arm = 0x1c0,

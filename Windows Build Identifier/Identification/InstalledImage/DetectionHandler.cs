@@ -51,6 +51,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             string kernelPath = "";
             string softwareHivePath = "";
             string systemHivePath = "";
+            string userPath = "";
 
             var kernelEntry = fileentries.FirstOrDefault(x =>
             x.EndsWith(
@@ -76,9 +77,16 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 systemHivePath = installProvider.ExpandFile(systemHiveEntry);
             }
 
+            var userEntry = fileentries.FirstOrDefault(x => x.EndsWith(@"\system32\user.exe", StringComparison.InvariantCultureIgnoreCase));
+            if (userEntry != null)
+            {
+                userPath = installProvider.ExpandFile(userEntry);
+            }
+
             #region Version Gathering
             VersionInfo1 info = new VersionInfo1();
             VersionInfo2 info2 = new VersionInfo2();
+            VersionInfo1 info3 = new VersionInfo1();
 
             if (!string.IsNullOrEmpty(kernelPath))
             {
@@ -97,11 +105,18 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 info2 = ExtractVersionInfo2(softwareHivePath, systemHivePath);
             }
 
+            if (!string.IsNullOrEmpty(userPath))
+            {
+                Console.WriteLine("Extracting version information from the image 3");
+                info3 = ExtractVersionInfo(userPath);
+            }
+
             report.Tag = info2.Tag;
             report.Licensing = info2.Licensing;
             report.LanguageCodes = info2.LanguageCodes;
 
             WindowsVersion correctVersion = Common.GetGreaterVersion(info.version, info2.version);
+            correctVersion = Common.GetGreaterVersion(correctVersion, info3.version);
 
             if (correctVersion != null)
             {
@@ -163,6 +178,13 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             if (!string.IsNullOrEmpty(systemHivePath))
                 File.Delete(systemHivePath);
 
+            report = FixSkuNames(report, IsUnstaged);
+
+            return report;
+        }
+
+        public static WindowsImage FixSkuNames(WindowsImage report, bool IsUnstaged)
+        {
             if (!string.IsNullOrEmpty(report.Sku))
             {
                 if (report.BuildNumber > 2195)
@@ -255,7 +277,14 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
             FileVersionInfo info = FileVersionInfo.GetVersionInfo(kernelPath);
 
-            result.Architecture = Common.GetMachineTypeFromFile(new FileStream(kernelPath, FileMode.Open));
+            try
+            {
+                result.Architecture = Common.GetMachineTypeFromFile(new FileStream(kernelPath, FileMode.Open));
+            }
+            catch
+            {
+                
+            }
 
             var ver = info.FileVersion;
 

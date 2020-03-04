@@ -24,14 +24,11 @@ using CommandLine;
 using DiscUtils.Iso9660;
 using DiscUtils.Udf;
 using DiscUtils.Vfs;
-using IniParser;
-using IniParser.Model;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Serialization;
 using WindowsBuildIdentifier.Identification;
@@ -420,7 +417,20 @@ namespace WindowsBuildIdentifier
 
                         if (result.Any(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")))
                         {
-                            var wimtag = result.First(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif"));
+                            var txtsetups = result.Where(x => x.Location.EndsWith(@"\txtsetup.sif")).Select(x => x.Metadata.WindowsImageIndexes);
+
+                            WindowsImageIndex[] indexes = null;
+                            foreach (var arr in txtsetups)
+                            {
+                                if (indexes == null)
+                                {
+                                    indexes = arr;
+                                }
+                                else
+                                {
+                                    indexes.Concat(arr);
+                                }
+                            }
 
                             XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
                             string xml = "";
@@ -435,7 +445,7 @@ namespace WindowsBuildIdentifier
 
                                 using (XmlWriter writer = XmlWriter.Create(sww, settings))
                                 {
-                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xsSubmit.Serialize(writer, indexes);
                                     xml = sww.ToString();
                                 }
                             }
@@ -501,7 +511,20 @@ namespace WindowsBuildIdentifier
 
                         if (result.Any(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")))
                         {
-                            var wimtag = result.First(x => x.Location.EndsWith(@"\txtsetup.sif"));
+                            var txtsetups = result.Where(x => x.Location.EndsWith(@"\txtsetup.sif")).Select(x => x.Metadata.WindowsImageIndexes);
+
+                            WindowsImageIndex[] indexes = null;
+                            foreach (var arr in txtsetups)
+                            {
+                                if (indexes == null)
+                                {
+                                    indexes = arr;
+                                }
+                                else
+                                {
+                                    indexes.Concat(arr);
+                                }
+                            }
 
                             XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
                             string xml = "";
@@ -516,7 +539,7 @@ namespace WindowsBuildIdentifier
 
                                 using (XmlWriter writer = XmlWriter.Create(sww, settings))
                                 {
-                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xsSubmit.Serialize(writer, indexes);
                                     xml = sww.ToString();
                                 }
                             }

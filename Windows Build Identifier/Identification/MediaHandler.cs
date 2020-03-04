@@ -218,11 +218,14 @@ namespace WindowsBuildIdentifier.Identification
             Common.DisplayReport(report);
         }
 
-        private static WindowsImageIndex[] IdentifyWindowsNTFromRootFs(IFileSystem fileSystem)
+        private static WindowsImageIndex[] IdentifyWindowsNTFromRootFs(TxtSetupBridge fileSystem)
         {
             RootFsInstallProviderInterface provider = new RootFsInstallProviderInterface(fileSystem);
 
             var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+            report.Sku = fileSystem.GetSkuFromTxtSetupMedia(report.BuildNumber);
+            report = InstalledImage.DetectionHandler.FixSkuNames(report, false);
+
             Common.DisplayReport(report);
 
             var index = new WindowsImageIndex() { WindowsImage = report };
@@ -365,13 +368,19 @@ namespace WindowsBuildIdentifier.Identification
                             }
                         case "sif":
                             {
-                                if (fileItem.Location.Contains("txtsetup.sif", StringComparison.InvariantCultureIgnoreCase))
+                                try
                                 {
-                                    var bridge = new TxtSetupBridge(facade, string.Join("\\", fileItem.Location.Split('\\')[0..^1]));
-                                    var tempIndexes = IdentifyWindowsNTFromRootFs(bridge); 
-                                    fileItem.Metadata = new MetaData();
-                                    fileItem.Metadata.WindowsImageIndexes = tempIndexes;
+                                    if (fileItem.Location.Contains("txtsetup.sif", StringComparison.InvariantCultureIgnoreCase))
+                                    {
+                                        var bridge = new TxtSetupBridge(facade, string.Join("\\", fileItem.Location.Split('\\')[0..^1]));
+                                        var tempIndexes = IdentifyWindowsNTFromRootFs(bridge);
+
+                                        fileItem.Metadata = new MetaData();
+                                        fileItem.Metadata.WindowsImageIndexes = tempIndexes;
+
+                                    }
                                 }
+                                catch { };
                                 break;
                             }
                         case "mui":
