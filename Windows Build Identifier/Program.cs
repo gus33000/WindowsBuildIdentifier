@@ -417,7 +417,7 @@ namespace WindowsBuildIdentifier
 
                         if (result.Any(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")))
                         {
-                            var txtsetups = result.Where(x => x.Location.EndsWith(@"\txtsetup.sif")).Select(x => x.Metadata.WindowsImageIndexes);
+                            var txtsetups = result.Where(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")).Select(x => x.Metadata.WindowsImageIndexes);
 
                             WindowsImageIndex[] indexes = null;
                             foreach (var arr in txtsetups)
@@ -428,7 +428,9 @@ namespace WindowsBuildIdentifier
                                 }
                                 else
                                 {
-                                    indexes.Concat(arr);
+                                    var tmplist = indexes.ToList();
+                                    tmplist.AddRange(arr);
+                                    indexes = tmplist.ToArray();
                                 }
                             }
 
@@ -511,7 +513,7 @@ namespace WindowsBuildIdentifier
 
                         if (result.Any(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")))
                         {
-                            var txtsetups = result.Where(x => x.Location.EndsWith(@"\txtsetup.sif")).Select(x => x.Metadata.WindowsImageIndexes);
+                            var txtsetups = result.Where(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")).Select(x => x.Metadata.WindowsImageIndexes);
 
                             WindowsImageIndex[] indexes = null;
                             foreach (var arr in txtsetups)
@@ -522,7 +524,9 @@ namespace WindowsBuildIdentifier
                                 }
                                 else
                                 {
-                                    indexes.Concat(arr);
+                                    var tmplist = indexes.ToList();
+                                    tmplist.AddRange(arr);
+                                    indexes = tmplist.ToArray();
                                 }
                             }
 
