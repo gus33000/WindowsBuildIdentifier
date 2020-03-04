@@ -287,7 +287,7 @@ namespace WindowsBuildIdentifier.Interfaces
                 }
                 else if (_editionletter == 'c')
                 {
-                    sku = "Home";
+                    sku = "Personal";
                 }
                 else if (_editionletter == 'w')
                 {
