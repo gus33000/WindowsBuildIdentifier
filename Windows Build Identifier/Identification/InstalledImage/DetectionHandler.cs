@@ -93,8 +93,6 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 Console.WriteLine("Extracting version information from the image 1");
                 info = ExtractVersionInfo(kernelPath);
 
-                File.Delete(kernelPath);
-
                 report.Architecture = info.Architecture;
                 report.BuildType = info.BuildType;
             }
@@ -115,6 +113,24 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             report.Licensing = info2.Licensing;
             report.LanguageCodes = info2.LanguageCodes;
 
+            if (report.LanguageCodes == null || report.LanguageCodes.Length == 0)
+            {
+                FileVersionInfo infover = FileVersionInfo.GetVersionInfo(kernelPath);
+
+                var cultures = CultureInfo.GetCultures(CultureTypes.AllCultures);
+                foreach (var culture in cultures)
+                {
+                    if (culture.EnglishName == infover.Language)
+                    {
+                        report.LanguageCodes = new string[] { culture.Name };
+                        break;
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(kernelPath))
+                File.Delete(kernelPath);
+
             WindowsVersion correctVersion = Common.GetGreaterVersion(info.version, info2.version);
             correctVersion = Common.GetGreaterVersion(correctVersion, info3.version);
 
@@ -127,6 +143,49 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 report.BranchName = correctVersion.BranchName;
                 report.CompileDate = correctVersion.CompileDate;
             }
+
+            // we have to scan all binaries because early versions of NT
+            // do not report the same versions in all binaries
+            if (report.BuildNumber < 1130)
+            {
+                Console.WriteLine("Determined the reported build number was unreliable. Checking a few more binaries...");
+                ulong buildwindow = report.BuildNumber + 50;
+                foreach (var binary in installProvider.GetFileSystemEntries())
+                {
+                    if (binary.EndsWith(".dll", StringComparison.InvariantCultureIgnoreCase) || 
+                        binary.EndsWith(".exe", StringComparison.InvariantCultureIgnoreCase) || 
+                        binary.EndsWith(".sys", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        string file = "";
+                        try
+                        {
+                            file = installProvider.ExpandFile(binary);
+                            var verinfo = ExtractVersionInfo(file);
+
+                            if (verinfo.version != null && verinfo.version.MajorVersion == report.MajorVersion && verinfo.version.MinorVersion == report.MinorVersion &&
+                                verinfo.version.BuildNumber < buildwindow && report.BuildNumber < verinfo.version.BuildNumber) // allow a gap of 50 builds max
+                            {
+                                Console.WriteLine("File with newer version found: " + binary + " => " + verinfo.version.BuildNumber);
+
+                                report.BuildNumber = verinfo.version.BuildNumber;
+                                report.DeltaVersion = verinfo.version.DeltaVersion;
+                            }
+                        }
+                        catch { }
+                        finally
+                        {
+                            if (!string.IsNullOrEmpty(file) && File.Exists(file))
+                            {
+                                try
+                                {
+                                    File.Delete(file);
+                                } catch { };
+                            }
+                        };
+                    }
+                }
+            }
+
             #endregion
 
             #region Edition Gathering
@@ -192,6 +251,18 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                     if (report.Sku.Equals("personal", StringComparison.InvariantCultureIgnoreCase))
                     {
                         report.Sku = "Home";
+                    }
+
+                    if (report.Sku.Equals("advancedserver", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        report.Sku = "EnterpriseServer";
+                    }
+                }
+                else
+                {
+                    if (report.Sku.Equals("EnterpriseServer", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        report.Sku = "AdvancedServer";
                     }
                 }
 
@@ -288,12 +359,15 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
             var ver = info.FileVersion;
 
-            if (ver.Count(x => x == '.') < 4)
+            if (ver != null)
             {
-                ver = info.FileMajorPart + "." + info.FileMinorPart + "." + info.FileBuildPart + "." + info.FilePrivatePart;
-            }
+                if (ver.Count(x => x == '.') < 4)
+                {
+                    ver = info.FileMajorPart + "." + info.FileMinorPart + "." + info.FileBuildPart + "." + info.FilePrivatePart;
+                }
 
-            result.version = Common.ParseBuildString(ver);
+                result.version = Common.ParseBuildString(ver);
+            }
 
             result.BuildType = info.IsDebug ? BuildType.chk : BuildType.fre;
 

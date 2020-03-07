@@ -80,6 +80,8 @@ namespace WindowsBuildIdentifier.Identification
 
                     var splitver = rawversion.Split('.');
 
+                    Console.WriteLine(rawversion);
+
                     verinfo.MajorVersion = ulong.Parse(splitver[0]);
                     verinfo.MinorVersion = ulong.Parse(splitver[1]);
                     verinfo.BuildNumber = ulong.Parse(splitver[2]);

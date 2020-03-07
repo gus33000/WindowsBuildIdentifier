@@ -169,7 +169,7 @@ namespace WindowsBuildIdentifier.Interfaces
             var subkey = hive.Root.OpenSubKey(@"ControlSet001\Services\setupdd");
             byte[] buffer = (byte[])subkey.GetValue("");
 
-            if (buffer.Length >= 16)
+            if (buffer != null && buffer.Length >= 16)
             {
                 // value is storred in big endian...
                 byte[] productsuiteData = buffer[12..16];
@@ -267,62 +267,75 @@ namespace WindowsBuildIdentifier.Interfaces
                     sku = data["SetupData"]["ProductSuite"].Replace(" ", "").Replace("\"", "");
                 }
 
-                var cdtag = data["SourceDisksNames"]["_x"].Split(",")[1].Replace("\"", "");
-
-                if (cdtag.Contains("%"))
+                string cdtag = null;
+                if (data.Sections.Any(x => x.SectionName == "SourceDisksNames"))
                 {
-                    var strings = data["Strings"];
-                    var nonescapedpart = cdtag.Split("%")[1];
-                    var replacement = strings[nonescapedpart];
-                    cdtag = cdtag.Replace("%" + nonescapedpart + "%", replacement).Replace("\"", "");
+                    cdtag = data["SourceDisksNames"]["_x"].Split(",")[1].Replace("\"", "");
+                }
+                else if (data.Sections.Any(x => x.SectionName == "Media"))
+                {
+                    cdtag = data["Media"]["dx"].Split(",")[1].Replace("\"", "");
                 }
 
-                string editionletter = cdtag.Replace("cdrom.", "").Split(".")[0];
-                char _editionletter2 = editionletter[^2];
-                char _editionletter = editionletter[^1];
+                if (cdtag != null)
+                {
+                    if (cdtag.Contains("%"))
+                    {
+                        var strings = data["Strings"];
+                        var nonescapedpart = cdtag.Split("%")[1];
+                        var replacement = strings[nonescapedpart];
+                        cdtag = cdtag.Replace("%" + nonescapedpart + "%", replacement).Replace("\"", "");
+                    }
 
-                if (_editionletter == 'p')
-                {
-                    sku = "Professional";
-                }
-                else if (_editionletter == 'c')
-                {
-                    sku = "Personal";
-                }
-                else if (_editionletter == 'w')
-                {
-                    sku = "Workstation";
-                }
-                else if (_editionletter == 'b')
-                {
-                    sku = "WebServer";
-                }
-                else if (_editionletter == 's')
-                {
-                    sku = "StandardServer";
-                    if (_editionletter2 == 't')
+                    string editionletter = cdtag.Replace("cdrom.", "").Split(".")[0];
+                    char _editionletter2 = '\0';
+                    if (editionletter.Length >= 2)
+                        _editionletter2 = editionletter[^2];
+                    char _editionletter = editionletter[^1];
+
+                    if (_editionletter == 'p')
                     {
-                        sku = "TerminalServer";
+                        sku = "Professional";
                     }
-                }
-                else if (_editionletter == 'a')
-                {
-                    if (build < 2202)
+                    else if (_editionletter == 'c')
                     {
-                        sku = "AdvancedServer";
+                        sku = "Personal";
                     }
-                    else
+                    else if (_editionletter == 'w')
                     {
-                        sku = "EnterpriseServer";
+                        sku = "Workstation";
                     }
-                }
-                else if (_editionletter == 'l')
-                {
-                    sku = "SmallbusinessServer";
-                }
-                else if (_editionletter == 'd')
-                {
-                    sku = "DatacenterServer";
+                    else if (_editionletter == 'b')
+                    {
+                        sku = "WebServer";
+                    }
+                    else if (_editionletter == 's')
+                    {
+                        sku = "StandardServer";
+                        if (_editionletter2 == 't')
+                        {
+                            sku = "TerminalServer";
+                        }
+                    }
+                    else if (_editionletter == 'a')
+                    {
+                        if (build < 2202)
+                        {
+                            sku = "AdvancedServer";
+                        }
+                        else
+                        {
+                            sku = "EnterpriseServer";
+                        }
+                    }
+                    else if (_editionletter == 'l')
+                    {
+                        sku = "SmallbusinessServer";
+                    }
+                    else if (_editionletter == 'd')
+                    {
+                        sku = "DatacenterServer";
+                    }
                 }
             }
 

@@ -380,7 +380,7 @@ namespace WindowsBuildIdentifier.Identification
 
                                     }
                                 }
-                                catch { };
+                                catch (Exception ex) { Console.WriteLine(ex.ToString()); };
                                 break;
                             }
                         case "mui":
