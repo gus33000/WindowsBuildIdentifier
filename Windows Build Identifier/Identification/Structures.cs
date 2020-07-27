@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace WindowsBuildIdentifier.Identification
 {
@@ -274,6 +275,7 @@ namespace WindowsBuildIdentifier.Identification
         sh5 = 0x1a8,
         thumb = 0x1c2,
         wcemipsv2 = 0x169,
+        nec98 = 0xffff
     }
 
     public class WindowsVersion

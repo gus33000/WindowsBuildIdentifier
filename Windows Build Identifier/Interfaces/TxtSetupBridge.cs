@@ -140,26 +140,26 @@ namespace WindowsBuildIdentifier.Interfaces
 
         public enum ProductMasks
         {
-            VER_SUITE_SMALLBUSINESS             = 0x00000001,
-            VER_SUITE_SMALLBUSINESS_RESTRICTED  = 0x00000020,
+            VER_SUITE_SMALLBUSINESS = 0x00000001,
+            VER_SUITE_SMALLBUSINESS_RESTRICTED = 0x00000020,
 
-            VER_SUITE_EMBEDDEDNT                = 0x00000040,
-            VER_SUITE_EMBEDDED_RESTRICTED       = 0x00000800,
+            VER_SUITE_EMBEDDEDNT = 0x00000040,
+            VER_SUITE_EMBEDDED_RESTRICTED = 0x00000800,
 
-            VER_SUITE_TERMINAL                  = 0x00000010,
-            VER_SUITE_SINGLEUSERTS              = 0x00000100,
-            VER_SUITE_MULTIUSERTS               = 0x00020000,
+            VER_SUITE_TERMINAL = 0x00000010,
+            VER_SUITE_SINGLEUSERTS = 0x00000100,
+            VER_SUITE_MULTIUSERTS = 0x00020000,
 
-            VER_SUITE_ENTERPRISE                = 0x00000002,
-            VER_SUITE_BACKOFFICE                = 0x00000004,
-            VER_SUITE_COMMUNICATIONS            = 0x00000008,
-            VER_SUITE_DATACENTER                = 0x00000080,
-            VER_SUITE_PERSONAL                  = 0x00000200,
-            VER_SUITE_BLADE                     = 0x00000400,
-            VER_SUITE_SECURITY_APPLIANCE        = 0x00001000,
-            VER_SUITE_STORAGE_SERVER            = 0x00002000,
-            VER_SUITE_COMPUTE_SERVER            = 0x00004000,
-            VER_SUITE_WH_SERVER                 = 0x00008000
+            VER_SUITE_ENTERPRISE = 0x00000002,
+            VER_SUITE_BACKOFFICE = 0x00000004,
+            VER_SUITE_COMMUNICATIONS = 0x00000008,
+            VER_SUITE_DATACENTER = 0x00000080,
+            VER_SUITE_PERSONAL = 0x00000200,
+            VER_SUITE_BLADE = 0x00000400,
+            VER_SUITE_SECURITY_APPLIANCE = 0x00001000,
+            VER_SUITE_STORAGE_SERVER = 0x00002000,
+            VER_SUITE_COMPUTE_SERVER = 0x00004000,
+            VER_SUITE_WH_SERVER = 0x00008000
         }
 
         public string GetSkuFromTxtSetupMedia(ulong build)
@@ -393,47 +393,63 @@ namespace WindowsBuildIdentifier.Interfaces
                 var vdata = el.Value.Split(',');
 
                 var filename = el.KeyName;
-                if (vdata.Length >= filenameid + 1 && !string.IsNullOrEmpty(vdata[filenameid]))
+                try
                 {
-                    filename = vdata[filenameid];
+                    if (vdata.Length >= filenameid + 1 && !string.IsNullOrEmpty(vdata[filenameid]))
+                    {
+                        filename = vdata[filenameid];
+                    }
                 }
+                catch { }
 
                 filename = filename.Replace("\"", "");
 
-                if (filename.Contains("%"))
+                try
                 {
-                    var nonescapedpart = filename.Split("%")[1];
-                    var replacement = strings[nonescapedpart];
-                    filename = filename.Replace("%" + nonescapedpart + "%", replacement).Replace("\"", "");
+                    if (filename.Contains("%"))
+                    {
+                        var nonescapedpart = filename.Split("%")[1];
+                        var replacement = strings[nonescapedpart];
+                        filename = filename.Replace("%" + nonescapedpart + "%", replacement).Replace("\"", "");
+                    }
                 }
+                catch { }
 
-                var directoryId = vdata[dirid];
-                string directory;
-                int ret;
-                if (directoryId == "" || !int.TryParse(directoryId, out ret) || dstdirs.GetKeyData(directoryId) == null)
+                try
                 {
-                    directory = "system32";
-                }
-                else
-                {
-                    directory = dstdirs.GetKeyData(directoryId).Value.Replace("\"", "");
-                }
+                    var directoryId = vdata[dirid];
+                    string directory;
+                    int ret;
+                    if (directoryId == "" || !int.TryParse(directoryId, out ret) || dstdirs.GetKeyData(directoryId) == null)
+                    {
+                        directory = "system32";
+                    }
+                    else
+                    {
+                        directory = dstdirs.GetKeyData(directoryId).Value.Replace("\"", "");
+                    }
 
-                if (directory.Contains("%"))
-                {
-                    var nonescapedpart = directory.Split("%")[1];
-                    var replacement = strings[nonescapedpart];
-                    directory = directory.Replace("%" + nonescapedpart + "%", replacement).Replace("\"", "");
-                }
+                    try
+                    {
+                        if (directory.Contains("%"))
+                        {
+                            var nonescapedpart = directory.Split("%")[1];
+                            var replacement = strings[nonescapedpart];
+                            directory = directory.Replace("%" + nonescapedpart + "%", replacement).Replace("\"", "");
+                        }
+                    }
+                    catch { }
 
-                if (directory == @"\")
-                {
-                    fileList.Add(new TxtSetupFileEntry() { Path = Path.Combine(defdir, filename), DiscLocation = el.KeyName });
+                    if (directory == @"\")
+                    {
+                        fileList.Add(new TxtSetupFileEntry() { Path = Path.Combine(defdir, filename), DiscLocation = el.KeyName });
+                    }
+                    else
+                    {
+                        fileList.Add(new TxtSetupFileEntry() { Path = Path.Combine(defdir, directory, filename), DiscLocation = el.KeyName });
+                    }
                 }
-                else
-                {
-                    fileList.Add(new TxtSetupFileEntry() { Path = Path.Combine(defdir, directory, filename), DiscLocation = el.KeyName });
-                }
+                catch { }
             }
 
             entries = fileList.ToArray();

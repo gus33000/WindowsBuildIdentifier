@@ -21,7 +21,11 @@ namespace WindowsBuildIdentifier.Identification
                 throw new Exception("Can't find PE header");
             }
 
-            MachineType machineType = (MachineType)br.ReadUInt16();
+            var type = br.ReadUInt16();
+
+            Console.WriteLine("Machine type: " + type);
+
+            MachineType machineType = (MachineType)type;
             br.Close();
             fs.Close();
             return machineType;

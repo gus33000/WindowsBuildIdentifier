@@ -152,6 +152,11 @@ namespace WindowsBuildIdentifier
               errs => 1);
         }
 
+        public static string ReplaceInvalidChars(string filename)
+        {
+            return Path.Join(filename.Replace(Path.GetFileName(filename), ""),  string.Join("_", Path.GetFileName(filename).Split(Path.GetInvalidFileNameChars())));
+        }
+
         private static (string, string) GetAdequateNameFromImageIndexes(WindowsImageIndex[] imageIndexes)
         {
             var f = imageIndexes[0].WindowsImage;
@@ -289,14 +294,14 @@ namespace WindowsBuildIdentifier
                 Console.WriteLine($"Target filename: {dst}");
                 Console.WriteLine();
 
-                if (file == dst)
+                if (file == ReplaceInvalidChars(dst))
                 {
                     Console.WriteLine("Nothing to do, file name is already good");
                 }
                 else
                 {
                     Console.WriteLine("Renaming");
-                    File.Move(file, dst);
+                    File.Move(file, ReplaceInvalidChars(dst));
                 }
 
                 Console.WriteLine("Done.");
@@ -402,7 +407,7 @@ namespace WindowsBuildIdentifier
                     Directory.CreateDirectory(finalpath);
                 }
 
-                File.Move(file, Path.Combine(finalpath, file.Split(@"\")[^1]));
+                File.Move(file, ReplaceInvalidChars(Path.Combine(finalpath, file.Split(@"\")[^1])));
             }
 
             return 0;
@@ -458,14 +463,14 @@ namespace WindowsBuildIdentifier
             Console.WriteLine($"Target filename: {dst}");
             Console.WriteLine();
 
-            if (opts.Media == dst)
+            if (opts.Media == ReplaceInvalidChars(dst))
             {
                 Console.WriteLine("Nothing to do, file name is already good");
             }
             else
             {
                 Console.WriteLine("Renaming");
-                File.Move(opts.Media, dst);
+                File.Move(opts.Media, ReplaceInvalidChars(dst));
             }
 
             Console.WriteLine("Done.");

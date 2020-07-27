@@ -49,6 +49,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             //
 
             string kernelPath = "";
+            string shell32Path = "";
             string softwareHivePath = "";
             string systemHivePath = "";
             string userPath = "";
@@ -65,13 +66,19 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 kernelPath = installProvider.ExpandFile(kernelEntry);
             }
 
-            var softwareHiveEntry = fileentries.FirstOrDefault(x => x.Equals(@"windows\system32\config\software", StringComparison.InvariantCultureIgnoreCase));
+            var shell32Entry = fileentries.FirstOrDefault(x => x.EndsWith(@"system32\shell32.dll", StringComparison.InvariantCultureIgnoreCase));
+            if (shell32Entry != null)
+            {
+                shell32Path = installProvider.ExpandFile(shell32Entry);
+            }
+
+            var softwareHiveEntry = fileentries.FirstOrDefault(x => x.EndsWith(@"system32\config\software", StringComparison.InvariantCultureIgnoreCase));
             if (softwareHiveEntry != null)
             {
                 softwareHivePath = installProvider.ExpandFile(softwareHiveEntry);
             }
 
-            var systemHiveEntry = fileentries.FirstOrDefault(x => x.Equals(@"windows\system32\config\system", StringComparison.InvariantCultureIgnoreCase));
+            var systemHiveEntry = fileentries.FirstOrDefault(x => x.EndsWith(@"system32\config\system", StringComparison.InvariantCultureIgnoreCase));
             if (systemHiveEntry != null)
             {
                 systemHivePath = installProvider.ExpandFile(systemHiveEntry);
@@ -95,6 +102,13 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
                 report.Architecture = info.Architecture;
                 report.BuildType = info.BuildType;
+
+                if (report.Architecture == MachineType.x86)
+                {
+                    var possibleNec98 = fileentries.FirstOrDefault(x => x.Contains(@"system32\hal98", StringComparison.InvariantCultureIgnoreCase));
+                    if (possibleNec98 != null)
+                        report.Architecture = MachineType.nec98;
+                }
             }
 
             if (!string.IsNullOrEmpty(softwareHivePath) && !string.IsNullOrEmpty(systemHivePath))
@@ -116,6 +130,11 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             if (report.LanguageCodes == null || report.LanguageCodes.Length == 0)
             {
                 FileVersionInfo infover = FileVersionInfo.GetVersionInfo(kernelPath);
+
+                if (infover.Language == "Language Neutral")
+                {
+                    infover = FileVersionInfo.GetVersionInfo(shell32Path);
+                }
 
                 var cultures = CultureInfo.GetCultures(CultureTypes.AllCultures);
                 foreach (var culture in cultures)
