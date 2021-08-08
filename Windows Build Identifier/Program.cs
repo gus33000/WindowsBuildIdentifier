@@ -230,7 +230,15 @@ namespace WindowsBuildIdentifier
                     case "wim":
                     case "esd":
                         {
-                            result = new FileItem[] { new FileItem() { Metadata = new MetaData() { WindowsImageIndexes = Identification.MediaHandler.IdentifyWindowsFromWIM(File.OpenRead(file), true) } } };
+                            var images = Identification.MediaHandler.IdentifyWindowsFromWIM(File.OpenRead(file), true);
+                            if (images.Length > 0)
+                            {
+                                result = new FileItem[] { new FileItem() { Metadata = new MetaData() { WindowsImageIndexes = images } } };
+                            }
+                            else
+                            {
+                                continue;
+                            }
                             break;
                         }
                     default:
@@ -341,7 +349,15 @@ namespace WindowsBuildIdentifier
                     case "wim":
                     case "esd":
                         {
-                            result = new FileItem[] { new FileItem() { Metadata = new MetaData() { WindowsImageIndexes = Identification.MediaHandler.IdentifyWindowsFromWIM(File.OpenRead(file), true) } } };
+                            var images = Identification.MediaHandler.IdentifyWindowsFromWIM(File.OpenRead(file), true);
+                            if (images.Length > 0)
+                            {
+                                result = new FileItem[] { new FileItem() { Metadata = new MetaData() { WindowsImageIndexes = images } } };
+                            }
+                            else
+                            {
+                                continue;
+                            }
                             break;
                         }
                     default:
