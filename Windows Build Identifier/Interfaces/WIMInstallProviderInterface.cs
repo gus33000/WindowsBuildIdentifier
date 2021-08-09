@@ -42,7 +42,9 @@ namespace WindowsBuildIdentifier.Interfaces
 
         public string ExpandFile(string Entry)
         {
-            string pathprefix = string.IsNullOrEmpty(_index) ? "" : _index + @"\";
+            string pathprefix = string.IsNullOrEmpty(_index)
+                ? ""
+                : _index + (Entry.StartsWith('\\') ? "" : "\\");
 
             if (!archiveFile.Entries.Any(x => x.FileName.Equals(pathprefix + Entry, StringComparison.InvariantCultureIgnoreCase)))
             {
