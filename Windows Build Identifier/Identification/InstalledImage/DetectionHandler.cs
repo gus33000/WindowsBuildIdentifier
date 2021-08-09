@@ -49,6 +49,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             //
 
             string kernelPath = "";
+            string hvPath = "";
             string shell32Path = "";
             string softwareHivePath = "";
             string systemHivePath = "";
@@ -64,6 +65,18 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             if (kernelEntry != null)
             {
                 kernelPath = installProvider.ExpandFile(kernelEntry);
+            }
+
+            var hvEntry = fileentries.FirstOrDefault(x =>
+            x.EndsWith(
+                @"\hvax64.exe", StringComparison.InvariantCultureIgnoreCase) &&
+                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase)) ??
+            fileentries.FirstOrDefault(x =>
+                x.EndsWith(@"\hvix64.exe", StringComparison.InvariantCultureIgnoreCase) &&
+                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase));
+            if (hvEntry != null)
+            {
+                hvPath = installProvider.ExpandFile(hvEntry);
             }
 
             var shell32Entry = fileentries.FirstOrDefault(x => x.EndsWith(@"system32\shell32.dll", StringComparison.InvariantCultureIgnoreCase));
@@ -114,7 +127,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             if (!string.IsNullOrEmpty(softwareHivePath) && !string.IsNullOrEmpty(systemHivePath))
             {
                 Console.WriteLine("Extracting version information from the image 2");
-                info2 = ExtractVersionInfo2(softwareHivePath, systemHivePath);
+                info2 = ExtractVersionInfo2(softwareHivePath, systemHivePath, hvPath);
             }
 
             if (!string.IsNullOrEmpty(userPath))
@@ -150,6 +163,9 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             if (!string.IsNullOrEmpty(kernelPath))
                 File.Delete(kernelPath);
 
+            if (!string.IsNullOrEmpty(hvPath))
+                File.Delete(hvPath);
+
             WindowsVersion correctVersion = Common.GetGreaterVersion(info.version, info2.version);
             correctVersion = Common.GetGreaterVersion(correctVersion, info3.version);
 
@@ -171,8 +187,8 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 ulong buildwindow = report.BuildNumber + 50;
                 foreach (var binary in installProvider.GetFileSystemEntries())
                 {
-                    if (binary.EndsWith(".dll", StringComparison.InvariantCultureIgnoreCase) || 
-                        binary.EndsWith(".exe", StringComparison.InvariantCultureIgnoreCase) || 
+                    if (binary.EndsWith(".dll", StringComparison.InvariantCultureIgnoreCase) ||
+                        binary.EndsWith(".exe", StringComparison.InvariantCultureIgnoreCase) ||
                         binary.EndsWith(".sys", StringComparison.InvariantCultureIgnoreCase))
                     {
                         string file = "";
@@ -209,7 +225,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
             #region Edition Gathering
             bool IsUnstaged = fileentries.Any(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
-            
+
             if (IsUnstaged)
             {
                 report.Sku = "Unstaged";
@@ -373,7 +389,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             }
             catch
             {
-                
+
             }
 
             var ver = info.FileVersion;
@@ -508,7 +524,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             return sku;
         }
 
-        private static VersionInfo2 ExtractVersionInfo2(string softwareHivePath, string systemHivePath)
+        private static VersionInfo2 ExtractVersionInfo2(string softwareHivePath, string systemHivePath, string hvPath)
         {
             VersionInfo2 result = new VersionInfo2();
 
@@ -526,9 +542,25 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
                     string releaseId = (string)subkey.GetValue("ReleaseId");
 
-                    int? UBR = (int?)subkey.GetValue("UBR");
                     int? Major = (int?)subkey.GetValue("CurrentMajorVersionNumber");
+                    string Build = (string)subkey.GetValue("CurrentBuildNumber");
                     int? Minor = (int?)subkey.GetValue("CurrentMinorVersionNumber");
+                    int? UBR = (int?)subkey.GetValue("UBR");
+                    string Branch = null;
+
+                    subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion\Update\TargetingInfo\Installed");
+                    if (subkey != null)
+                    {
+                        foreach (DiscUtils.Registry.RegistryKey sub in subkey.SubKeys)
+                        {
+                            if (!sub.Name.Contains(".OS."))
+                            {
+                                continue;
+                            }
+
+                            Branch = sub.GetValue("Branch") as string;
+                        }
+                    }
 
                     if (!string.IsNullOrEmpty(buildLab) && buildLab.Count(x => x == '.') == 2)
                     {
@@ -549,11 +581,6 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                         result.version.BuildNumber = ulong.Parse(splitLabEx[0]);
                     }
 
-                    if (UBR.HasValue)
-                    {
-                        result.version.DeltaVersion = (ulong)UBR.Value;
-                    }
-
                     if (Major.HasValue)
                     {
                         result.version.MajorVersion = (ulong)Major.Value;
@@ -564,12 +591,41 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                         result.version.MinorVersion = (ulong)Minor.Value;
                     }
 
+                    if (!string.IsNullOrEmpty(Build))
+                    {
+                        result.version.BuildNumber = ulong.Parse(Build);
+                    }
+
+                    if (UBR.HasValue)
+                    {
+                        result.version.DeltaVersion = (ulong)UBR.Value;
+                    }
+
+                    if (!string.IsNullOrEmpty(Branch))
+                    {
+                        result.version.BranchName = Branch;
+                    }
+
                     if (!string.IsNullOrEmpty(releaseId))
                     {
                         result.Tag = releaseId;
                     }
                 }
                 catch { };
+
+                if (!string.IsNullOrEmpty(hvPath))
+                {
+                    try
+                    {
+                        var content = File.ReadAllText(hvPath, System.Text.Encoding.ASCII).AsSpan();
+                        content = content[content.IndexOf("GitEnlistment")..];
+                        content = content[(content.IndexOf('.') + 1)..];
+                        content = content[..11];
+
+                        result.version.CompileDate = new string(content);
+                    }
+                    catch { };
+                }
 
                 try
                 {
