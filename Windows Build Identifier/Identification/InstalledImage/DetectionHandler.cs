@@ -414,41 +414,34 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 {
                     DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
 
-                    if (subkey.GetValue("SubscriptionPfnList") != null)
+                    var prodpol = (byte[])subkey.GetValue("ProductPolicy");
+                    var policies = Common.ParseProductPolicy(prodpol);
+                    var pol = policies.FirstOrDefault(x => x.Name == "Kernel-BrandingInfo")
+                        ?? policies.FirstOrDefault(x => x.Name == "Kernel-ProductInfo");
+
+                    if (pol != null && pol.Type == 4)
+                    {
+                        int product = BitConverter.ToInt32(pol.Data);
+                        Console.WriteLine("Detected product id: " + product);
+
+                        if (Enum.IsDefined(typeof(Product), product))
+                        {
+                            sku = Enum.GetName(typeof(Product), product);
+                        }
+                        else
+                        {
+                            sku = $"UnknownAdditional{product.ToString("X")}";
+                        }
+
+                        Console.WriteLine("Effective SKU: " + sku);
+                    }
+                    else if (subkey.GetValue("SubscriptionPfnList") != null)
                     {
                         var pfn = ((string[])subkey.GetValue("SubscriptionPfnList"))[0];
                         var product = pfn.Split(".")[2];
                         product = product.Replace("Pro", "Professional");
                         sku = product;
                         Console.WriteLine("Effective SKU: " + sku);
-                    }
-                    else
-                    {
-                        var prodpol = (byte[])subkey.GetValue("ProductPolicy");
-
-                        var policies = Common.ParseProductPolicy(prodpol);
-
-                        if (policies.Any(x => x.Name == "Kernel-ProductInfo"))
-                        {
-                            var pol = policies.First(x => x.Name == "Kernel-ProductInfo");
-
-                            if (pol.Type == 4)
-                            {
-                                int product = BitConverter.ToInt32(pol.Data);
-                                Console.WriteLine("Detected product id: " + product);
-
-                                if (Enum.IsDefined(typeof(Product), product))
-                                {
-                                    sku = Enum.GetName(typeof(Product), product);
-                                }
-                                else
-                                {
-                                    sku = $"UnknownAdditional{product.ToString("X")}";
-                                }
-
-                                Console.WriteLine("Effective SKU: " + sku);
-                            }
-                        }
                     }
                 }
                 catch { };
