@@ -56,24 +56,18 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             string userPath = "";
 
             var kernelEntry = fileentries.FirstOrDefault(x =>
-            x.EndsWith(
-                @"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase) &&
-                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase)) ??
-            fileentries.FirstOrDefault(x =>
-                x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase) &&
-                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase));
+                (x.EndsWith(@"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase) || x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase))
+                && !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase));
             if (kernelEntry != null)
             {
                 kernelPath = installProvider.ExpandFile(kernelEntry);
             }
 
             var hvEntry = fileentries.FirstOrDefault(x =>
-            x.EndsWith(
-                @"\hvax64.exe", StringComparison.InvariantCultureIgnoreCase) &&
-                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase)) ??
-            fileentries.FirstOrDefault(x =>
-                x.EndsWith(@"\hvix64.exe", StringComparison.InvariantCultureIgnoreCase) &&
-                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase));
+                (x.EndsWith(@"\hvax64.exe", StringComparison.InvariantCultureIgnoreCase) // AMD64
+                    || x.EndsWith(@"\hvix64.exe", StringComparison.InvariantCultureIgnoreCase) // Intel64
+                    || x.EndsWith(@"\hvaa64.exe", StringComparison.InvariantCultureIgnoreCase)) // ARM64
+                && !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase));
             if (hvEntry != null)
             {
                 hvPath = installProvider.ExpandFile(hvEntry);
