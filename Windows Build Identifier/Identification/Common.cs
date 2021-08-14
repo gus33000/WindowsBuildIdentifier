@@ -249,6 +249,7 @@ namespace WindowsBuildIdentifier.Identification
             Console.WriteLine("Architecture : " + report.Architecture);
             Console.WriteLine("BuildType    : " + report.BuildType);
             Console.WriteLine("Types        : " + typedisp);
+            Console.WriteLine("Base Sku     : " + report.BaseSku);
             Console.WriteLine("Sku          : " + report.Sku);
             Console.WriteLine("Editions     : " + editiondisp);
             Console.WriteLine("Licensing    : " + report.Licensing);

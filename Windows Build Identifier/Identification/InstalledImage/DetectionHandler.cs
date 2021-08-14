@@ -257,7 +257,9 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             else if (!string.IsNullOrEmpty(systemHivePath))
             {
                 Console.WriteLine("Extracting additional edition information");
-                report.Sku = ExtractEditionFromRegistry(systemHivePath);
+                var skuData = ExtractEditionFromRegistry(systemHivePath, softwareHivePath);
+                report.BaseSku = skuData.baseSku;
+                report.Sku = skuData.sku;
             }
             #endregion
 
@@ -403,9 +405,9 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             return result;
         }
 
-        private static string ExtractEditionFromRegistry(string systemHivePath)
+        private static (string baseSku, string sku) ExtractEditionFromRegistry(string systemHivePath, string softwareHivePath)
         {
-            string sku = "";
+            (string baseSku, string sku) ret = ("", "");
 
             using (var hiveStream = new FileStream(systemHivePath, FileMode.Open, FileAccess.Read))
             using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
@@ -416,9 +418,8 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
                     var prodpol = (byte[])subkey.GetValue("ProductPolicy");
                     var policies = Common.ParseProductPolicy(prodpol);
-                    var pol = policies.FirstOrDefault(x => x.Name == "Kernel-BrandingInfo")
-                        ?? policies.FirstOrDefault(x => x.Name == "Kernel-ProductInfo");
 
+                    var pol = policies.FirstOrDefault(x => x.Name == "Kernel-ProductInfo");
                     if (pol != null && pol.Type == 4)
                     {
                         int product = BitConverter.ToInt32(pol.Data);
@@ -426,26 +427,66 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
                         if (Enum.IsDefined(typeof(Product), product))
                         {
-                            sku = Enum.GetName(typeof(Product), product);
+                            ret.baseSku = Enum.GetName(typeof(Product), product);
                         }
                         else
                         {
-                            sku = $"UnknownAdditional{product.ToString("X")}";
+                            ret.baseSku = $"UnknownAdditional{product.ToString("X")}";
                         }
 
-                        Console.WriteLine("Effective SKU: " + sku);
+                        ret.sku = ret.baseSku;
+                        Console.WriteLine("Base SKU: " + ret.baseSku);
                     }
-                    else if (subkey.GetValue("SubscriptionPfnList") != null)
+
+                    pol = policies.FirstOrDefault(x => x.Name == "Kernel-BrandingInfo");
+                    if (pol != null && pol.Type == 4)
                     {
-                        var pfn = ((string[])subkey.GetValue("SubscriptionPfnList"))[0];
-                        var product = pfn.Split(".")[2];
-                        product = product.Replace("Pro", "Professional");
-                        sku = product;
-                        Console.WriteLine("Effective SKU: " + sku);
+                        int product = BitConverter.ToInt32(pol.Data);
+                        Console.WriteLine("Detected product id: " + product);
+
+                        if (Enum.IsDefined(typeof(Product), product))
+                        {
+                            ret.sku = Enum.GetName(typeof(Product), product);
+                        }
+                        else
+                        {
+                            ret.sku = $"UnknownAdditional{product.ToString("X")}";
+                        }
+
+                        if (string.IsNullOrEmpty(ret.baseSku))
+                        {
+                            ret.baseSku = ret.sku;
+                        }
+
+                        Console.WriteLine("Branding SKU: " + ret.sku);
                     }
+
+                    return ret;
                 }
                 catch { };
 
+
+                using (var softHiveStream = new FileStream(softwareHivePath, FileMode.Open, FileAccess.Read))
+                using (DiscUtils.Registry.RegistryHive softHive = new DiscUtils.Registry.RegistryHive(softHiveStream))
+                {
+                    try
+                    {
+                        DiscUtils.Registry.RegistryKey subkey = softHive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
+                        if (subkey != null)
+                        {
+                            var edition = subkey.GetValue("EditionID") as string;
+                            var compositionEdition = subkey.GetValue("CompositionEditionID") as string;
+
+                            if (!string.IsNullOrEmpty(edition) && !string.IsNullOrEmpty(compositionEdition))
+                            {
+                                return (compositionEdition, edition);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                string sku = "";
                 if (string.IsNullOrEmpty(sku))
                 {
                     try
@@ -506,9 +547,10 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                     }
                     catch { };
                 }
+
+                return (sku, sku);
             }
 
-            return sku;
         }
 
         private static VersionInfo2 ExtractVersionInfo2(string softwareHivePath, string systemHivePath, string hvPath)

@@ -237,6 +237,7 @@ namespace WindowsBuildIdentifier.Identification
         public MachineType Architecture;
         public BuildType BuildType;
         public HashSet<Type> Types = new HashSet<Type>();
+        public string BaseSku;
         public string Sku;
         public string[] Editions;
         public Licensing Licensing;
