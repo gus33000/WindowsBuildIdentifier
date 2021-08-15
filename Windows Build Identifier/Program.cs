@@ -174,6 +174,7 @@ namespace WindowsBuildIdentifier
             var licensings = new HashSet<Licensing> { f.Licensing };
             var languages = f.LanguageCodes != null ? f.LanguageCodes.ToHashSet() : new HashSet<string>() { "lang-unknown" };
             var skus = new HashSet<string> { f.Sku.Replace("Server", "") };
+            var baseSkus = new HashSet<string> { f.Sku.Replace("Server", "") };
             var archs = new HashSet<string> { $"{f.Architecture}{f.BuildType}" };
 
             for (int i = 1; i < imageIndexes.Length; i++)
@@ -187,9 +188,15 @@ namespace WindowsBuildIdentifier
                     licensings.Add(d.Licensing);
                 }
                 languages = languages.Union(d.LanguageCodes).ToHashSet();
+
                 if (!skus.Contains(d.Sku.Replace("Server", "")))
                 {
                     skus.Add(d.Sku.Replace("Server", ""));
+                }
+
+                if (!baseSkus.Contains(d.BaseSku.Replace("Server", "")))
+                {
+                    baseSkus.Add(d.BaseSku.Replace("Server", ""));
                 }
 
                 if (!archs.Contains($"{f.Architecture}{f.BuildType}"))
@@ -201,9 +208,10 @@ namespace WindowsBuildIdentifier
             Console.WriteLine($"Build tag: {buildtag}");
             Console.WriteLine();
 
+            string skustr = skus.Count > 5 ? string.Join("-", baseSkus) + "-multi" : string.Join("-", skus);
             string licensingstr = licensings.Count == 0 ? "" : "_" + string.Join("-", licensings);
 
-            var filename = $"{string.Join("-", archs)}_{string.Join("-", types)}-{string.Join("-", skus)}{licensingstr}_{string.Join("-", languages)}";
+            var filename = $"{string.Join("-", archs)}_{string.Join("-", types)}-{skustr}{licensingstr}_{string.Join("-", languages)}";
 
             return (buildtag, filename);
         }
