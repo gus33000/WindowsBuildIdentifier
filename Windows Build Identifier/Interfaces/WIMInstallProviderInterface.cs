@@ -30,14 +30,20 @@ namespace WindowsBuildIdentifier.Interfaces
     public class WIMInstallProviderInterface : WindowsInstallProviderInterface
     {
         private readonly Stream _wimstream;
-        private readonly string _index;
         private readonly ArchiveFile archiveFile;
 
-        public WIMInstallProviderInterface(Stream wimstream, string index)
+        private string _index;
+
+        public WIMInstallProviderInterface(Stream wimstream, string index = "")
         {
             _wimstream = wimstream;
             _index = index;
             archiveFile = new ArchiveFile(_wimstream, SevenZipFormat.Wim);
+        }
+
+        public void SetIndex(string index)
+        {
+            _index = index;
         }
 
         public string ExpandFile(string Entry)

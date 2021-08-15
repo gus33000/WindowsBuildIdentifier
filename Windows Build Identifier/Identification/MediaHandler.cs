@@ -96,6 +96,8 @@ namespace WindowsBuildIdentifier.Identification
 
             Console.WriteLine($"Found {irelevantcount2} irrelevant images in the wim according to the XML");
 
+            var provider = new WIMInstallProviderInterface(wimstream);
+
             foreach (var image in wim.IMAGE)
             {
                 Console.WriteLine();
@@ -140,11 +142,9 @@ namespace WindowsBuildIdentifier.Identification
 
                 Console.WriteLine($"Index value: {index}");
 
-                var provider = new WIMInstallProviderInterface(wimstream, index);
+                provider.SetIndex(index);
 
                 var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
-
-                provider.Close();
 
                 // fallback
                 if ((string.IsNullOrEmpty(report.Sku) || report.Sku == "TerminalServer") && !string.IsNullOrEmpty(image.FLAGS))
@@ -205,6 +205,7 @@ namespace WindowsBuildIdentifier.Identification
                 results.Add(imageIndex);
             }
 
+            provider.Close();
             wimstream.Dispose();
 
             return results.ToArray();
