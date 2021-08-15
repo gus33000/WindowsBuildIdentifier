@@ -96,7 +96,7 @@ namespace WindowsBuildIdentifier
             [Option('m', "media", Required = true, HelpText = "The media file to work on.")]
             public string Media { get; set; }
 
-            [Option('o', "output", Required = true, HelpText = "The destination path for the windows index file.")]
+            [Option('o', "output", HelpText = "The destination path for the windows index file.")]
             public string Output { get; set; }
         }
 
@@ -119,7 +119,7 @@ namespace WindowsBuildIdentifier
             [Option('m', "media", Required = true, HelpText = "The media file to work on.")]
             public string Media { get; set; }
 
-            [Option('w', "windows-index", Required = true, HelpText = "The path of the windows index file.")]
+            [Option('w', "windows-index", HelpText = "The path of the windows index file.")]
             public string WindowsIndex { get; set; }
         }
 
@@ -444,6 +444,11 @@ namespace WindowsBuildIdentifier
         {
             PrintBanner();
 
+            if (string.IsNullOrEmpty(opts.WindowsIndex))
+            {
+                opts.WindowsIndex = $"{opts.Media}.meta_id.xml";
+            }
+
             Console.WriteLine("Input xml file: " + opts.WindowsIndex);
 
             Console.WriteLine("Input media: " + opts.Media);
@@ -498,6 +503,11 @@ namespace WindowsBuildIdentifier
             {
                 Console.WriteLine("Renaming");
                 File.Move(opts.Media, ReplaceInvalidChars(dst));
+
+                if (opts.WindowsIndex.Contains(opts.Media))
+                {
+                    File.Move(opts.WindowsIndex, opts.WindowsIndex.Replace(opts.Media, ReplaceInvalidChars(dst)));
+                }
             }
 
             Console.WriteLine("Done.");
@@ -619,6 +629,11 @@ namespace WindowsBuildIdentifier
             DiscUtils.Complete.SetupHelper.SetupComplete();
 
             var file = opts.Media;
+            if (string.IsNullOrEmpty(opts.Output))
+            {
+                opts.Output = $"{file}.meta_id.xml";
+            }
+
             var extension = file.Split(".")[^1];
 
             switch (extension.ToLower())
