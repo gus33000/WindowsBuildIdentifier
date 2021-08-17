@@ -164,7 +164,7 @@ namespace WindowsBuildIdentifier.Identification
 
                 CultureInfo provider = CultureInfo.InvariantCulture;
 
-                string format = "yyMMDD-HHmm";
+                const string format = "yyMMdd-HHmm";
 
                 DateTime date1 = DateTime.ParseExact(version1.CompileDate, format, provider);
                 DateTime date2 = DateTime.ParseExact(version2.CompileDate, format, provider);
