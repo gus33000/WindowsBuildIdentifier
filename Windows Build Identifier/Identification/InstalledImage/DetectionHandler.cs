@@ -409,6 +409,26 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
         {
             (string baseSku, string sku) ret = ("", "");
 
+            using (var softHiveStream = new FileStream(softwareHivePath, FileMode.Open, FileAccess.Read))
+            using (DiscUtils.Registry.RegistryHive softHive = new DiscUtils.Registry.RegistryHive(softHiveStream))
+            {
+                try
+                {
+                    DiscUtils.Registry.RegistryKey subkey = softHive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
+                    if (subkey != null)
+                    {
+                        var edition = subkey.GetValue("EditionID") as string;
+                        var compositionEdition = subkey.GetValue("CompositionEditionID") as string;
+
+                        if (!string.IsNullOrEmpty(edition) && !string.IsNullOrEmpty(compositionEdition))
+                        {
+                            return (compositionEdition, edition);
+                        }
+                    }
+                }
+                catch { }
+            }
+
             using (var hiveStream = new FileStream(systemHivePath, FileMode.Open, FileAccess.Read))
             using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
             {
@@ -464,27 +484,6 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                     return ret;
                 }
                 catch { };
-
-
-                using (var softHiveStream = new FileStream(softwareHivePath, FileMode.Open, FileAccess.Read))
-                using (DiscUtils.Registry.RegistryHive softHive = new DiscUtils.Registry.RegistryHive(softHiveStream))
-                {
-                    try
-                    {
-                        DiscUtils.Registry.RegistryKey subkey = softHive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
-                        if (subkey != null)
-                        {
-                            var edition = subkey.GetValue("EditionID") as string;
-                            var compositionEdition = subkey.GetValue("CompositionEditionID") as string;
-
-                            if (!string.IsNullOrEmpty(edition) && !string.IsNullOrEmpty(compositionEdition))
-                            {
-                                return (compositionEdition, edition);
-                            }
-                        }
-                    }
-                    catch { }
-                }
 
                 string sku = "";
                 if (string.IsNullOrEmpty(sku))
