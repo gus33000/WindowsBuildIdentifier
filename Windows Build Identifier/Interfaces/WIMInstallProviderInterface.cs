@@ -29,16 +29,14 @@ namespace WindowsBuildIdentifier.Interfaces
 {
     public class WIMInstallProviderInterface : WindowsInstallProviderInterface
     {
-        private readonly Stream _wimstream;
         private readonly ArchiveFile archiveFile;
 
         private string _index;
 
-        public WIMInstallProviderInterface(Stream wimstream, string index = "")
+        public WIMInstallProviderInterface(ArchiveFile archiveFile, string index = "")
         {
-            _wimstream = wimstream;
             _index = index;
-            archiveFile = new ArchiveFile(_wimstream, SevenZipFormat.Wim);
+            this.archiveFile = archiveFile;
         }
 
         public void SetIndex(string index)
@@ -84,7 +82,6 @@ namespace WindowsBuildIdentifier.Interfaces
 
         public void Close()
         {
-            archiveFile.Dispose();
         }
     }
 }

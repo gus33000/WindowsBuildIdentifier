@@ -21,30 +21,27 @@ namespace WindowsBuildIdentifier.Identification
 
         public class UnsupportedWIMXmlException : Exception { }
 
-        private static string ExtractWIMXml(Stream wimstream)
+        private static string ExtractWIMXml(ArchiveFile archiveFile)
         {
             try
             {
-                using (ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim))
+                if (archiveFile.Entries.Any(x => x.FileName == "[1].xml"))
                 {
-                    if (archiveFile.Entries.Any(x => x.FileName == "[1].xml"))
+                    Entry wimXmlEntry = archiveFile.Entries.First(x => x.FileName == "[1].xml");
+
+                    string xml;
+                    using (MemoryStream memoryStream = new MemoryStream())
                     {
-                        Entry wimXmlEntry = archiveFile.Entries.First(x => x.FileName == "[1].xml");
+                        wimXmlEntry.Extract(memoryStream);
 
-                        string xml;
-                        using (MemoryStream memoryStream = new MemoryStream())
-                        {
-                            wimXmlEntry.Extract(memoryStream);
-
-                            xml = Encoding.Unicode.GetString(memoryStream.ToArray(), 2, (int)memoryStream.Length - 2);
-                        }
-
-                        return xml;
+                        xml = Encoding.Unicode.GetString(memoryStream.ToArray(), 2, (int)memoryStream.Length - 2);
                     }
-                    else if (archiveFile.Entries.Any(x => x.FileName == "Windows"))
-                    {
-                        return archiveFile.GetArchiveComment();
-                    }
+
+                    return xml;
+                }
+                else if (archiveFile.Entries.Any(x => x.FileName == "Windows"))
+                {
+                    return archiveFile.GetArchiveComment();
                 }
 
                 throw new UnsupportedWIMException();
@@ -80,7 +77,9 @@ namespace WindowsBuildIdentifier.Identification
 
             Console.WriteLine("Gathering WIM information XML file");
 
-            string xml = ExtractWIMXml(wimstream);
+
+            using ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim);
+            string xml = ExtractWIMXml(archiveFile);
 
             Console.WriteLine("Parsing WIM information XML file");
             XmlFormats.WIMXml.WIM wim = GetWIMClassFromXml(xml);
@@ -96,7 +95,7 @@ namespace WindowsBuildIdentifier.Identification
 
             Console.WriteLine($"Found {irelevantcount2} irrelevant images in the wim according to the XML");
 
-            var provider = new WIMInstallProviderInterface(wimstream);
+            var provider = new WIMInstallProviderInterface(archiveFile);
 
             foreach (var image in wim.IMAGE)
             {
@@ -127,7 +126,6 @@ namespace WindowsBuildIdentifier.Identification
 
                 if (index != null && wim.IMAGE[0].INDEX == "0")
                 {
-                    using ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim);
                     if (!archiveFile.Entries.Any(x => x.FileName.StartsWith("0\\")))
                     {
                         WorkaroundForWIMFormatBug = true;
