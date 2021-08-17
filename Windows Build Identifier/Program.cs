@@ -154,7 +154,19 @@ namespace WindowsBuildIdentifier
 
         public static string ReplaceInvalidChars(string filename)
         {
-            return Path.Join(filename.Replace(Path.GetFileName(filename), ""),  string.Join("_", Path.GetFileName(filename).Split(Path.GetInvalidFileNameChars())));
+            string dir = Path.GetDirectoryName(filename);
+            char[] file = Path.GetFileName(filename).ToCharArray();
+
+            char[] remove = Path.GetInvalidFileNameChars();
+            for (int i = 0; i < file.Length; i++)
+            {
+                if (remove.Contains(file[i]))
+                {
+                    file[i] = '_';
+                }
+            }
+
+            return Path.Join(dir, file);
         }
 
         private static (string, string) GetAdequateNameFromImageIndexes(WindowsImageIndex[] imageIndexes)
