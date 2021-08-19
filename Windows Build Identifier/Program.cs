@@ -220,7 +220,7 @@ namespace WindowsBuildIdentifier
             Console.WriteLine($"Build tag: {buildtag}");
             Console.WriteLine();
 
-            string skustr = skus.Count > 5 ? string.Join("-", baseSkus) + "-multi" : string.Join("-", skus);
+            string skustr = skus.Count > 5 && baseSkus.Count < skus.Count ? string.Join("-", baseSkus) + "-multi" : string.Join("-", skus);
             string licensingstr = licensings.Count == 0 ? "" : "_" + string.Join("-", licensings);
 
             var filename = $"{string.Join("-", archs)}_{string.Join("-", types)}-{skustr}{licensingstr}_{string.Join("-", languages)}";
