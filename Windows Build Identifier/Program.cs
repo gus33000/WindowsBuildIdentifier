@@ -907,7 +907,7 @@ namespace WindowsBuildIdentifier
             Console.WriteLine("Release Identifier Tool");
             Console.WriteLine("Release Database Indexing Toolset");
             Console.WriteLine("Gustave Monce (@gus33000) (c) 2009-2020");
-            Console.WriteLine("Amendments by Thomas Hounsell (c) 2021");
+            Console.WriteLine("Thomas Hounsell (c) 2021");
             Console.WriteLine();
         }
 
