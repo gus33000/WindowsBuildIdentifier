@@ -542,7 +542,8 @@ namespace WindowsBuildIdentifier
                 {
                     Console.WriteLine("Update SHA-1 Checksum File");
                     string sha1Content = File.ReadAllText(sha1File);
-                    sha1Content = sha1Content.Replace(Path.GetFileName(opts.Media), dst);
+                    sha1Content = sha1Content.Replace(opts.Media, Path.GetFileName(dst));
+                    sha1Content = sha1Content.Replace(Path.GetFileName(opts.Media), Path.GetFileName(dst));
                     File.WriteAllText($"{dst}.sha1", sha1Content);
                     File.Delete(sha1File);
                 }
