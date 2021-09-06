@@ -502,23 +502,33 @@ namespace WindowsBuildIdentifier
             if (!string.IsNullOrEmpty(label))
                 dst = filename + "-" + label + "." + fileextension;
 
-            dst = string.Join(@"\", opts.Media.Split(@"\")[0..^1]) + @"\" + dst;
+            dst = Path.Combine(Path.GetDirectoryName(opts.WindowsIndex), ReplaceInvalidChars(dst));
 
             Console.WriteLine($"Target filename: {dst}");
             Console.WriteLine();
 
-            if (opts.Media == ReplaceInvalidChars(dst))
+            if (opts.Media == dst)
             {
                 Console.WriteLine("Nothing to do, file name is already good");
             }
             else
             {
                 Console.WriteLine("Renaming");
-                File.Move(opts.Media, ReplaceInvalidChars(dst));
+                File.Move(opts.Media, dst);
 
                 if (opts.WindowsIndex.Contains(opts.Media))
                 {
-                    File.Move(opts.WindowsIndex, opts.WindowsIndex.Replace(opts.Media, ReplaceInvalidChars(dst)));
+                    File.Move(opts.WindowsIndex, opts.WindowsIndex.Replace(opts.Media, dst));
+                }
+
+                string sha1File = $"{opts.Media}.sha1";
+                if (File.Exists(sha1File))
+                {
+                    Console.WriteLine("Update SHA-1 Checksum File");
+                    string sha1Content = File.ReadAllText(sha1File);
+                    sha1Content = sha1Content.Replace(Path.GetFileName(opts.Media), dst);
+                    File.WriteAllText($"{dst}.sha1", sha1Content);
+                    File.Delete(sha1File);
                 }
             }
 
