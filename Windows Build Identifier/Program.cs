@@ -206,7 +206,7 @@ namespace WindowsBuildIdentifier
                     skus.Add(d.Sku.Replace("Server", ""));
                 }
 
-                if (!baseSkus.Contains(d.BaseSku.Replace("Server", "")))
+                if (d.BaseSku != null && !baseSkus.Contains(d.BaseSku.Replace("Server", "")))
                 {
                     baseSkus.Add(d.BaseSku.Replace("Server", ""));
                 }
