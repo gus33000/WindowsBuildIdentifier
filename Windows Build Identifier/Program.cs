@@ -217,6 +217,22 @@ namespace WindowsBuildIdentifier
                 }
             }
 
+            // Don't include core SKUs in filename list if full is also included
+            foreach (string sku in skus.ToArray())
+            {
+                if (sku.Length >= 5 && sku.EndsWith("Core") && skus.Contains(sku[..^4]))
+                {
+                    skus.Remove(sku);
+                }
+            }
+            foreach (string baseSku in baseSkus.ToArray())
+            {
+                if (baseSku.Length >= 5 && baseSku.EndsWith("Core") && baseSkus.Contains(baseSku[..^4]))
+                {
+                    baseSkus.Remove(baseSku);
+                }
+            }
+
             Console.WriteLine($"Build tag: {buildtag}");
             Console.WriteLine();
 
