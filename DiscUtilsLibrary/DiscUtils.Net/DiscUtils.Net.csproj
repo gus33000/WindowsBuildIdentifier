@@ -6,6 +6,7 @@
     <Description>DiscUtils NET</Description>
     <Authors>Kenneth Bell;LordMike</Authors>
     <PackageTags>DiscUtils;NET;DNS</PackageTags>
+    <Platforms>AnyCPU;x64;x86</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

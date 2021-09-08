@@ -5,6 +5,7 @@
     <Description>DiscUtils Iso9660</Description>
     <Authors>Kenneth Bell;LordMike</Authors>
     <PackageTags>DiscUtils;Optical;Iso9660</PackageTags>
+    <Platforms>AnyCPU;x64;x86</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

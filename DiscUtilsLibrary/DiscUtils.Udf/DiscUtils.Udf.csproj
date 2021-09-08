@@ -5,6 +5,7 @@
     <Description>DiscUtils UDF filesystem parser.</Description>
     <Authors>Kenneth Bell;LordMike</Authors>
     <PackageTags>DiscUtils;Filesystem;UDF</PackageTags>
+    <Platforms>AnyCPU;x64;x86</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

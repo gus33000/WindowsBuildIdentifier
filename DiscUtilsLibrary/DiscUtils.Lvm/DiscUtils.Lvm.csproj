@@ -5,6 +5,7 @@
     <Description>DiscUtils LVM</Description>
     <Authors>Bianco Veigel</Authors>
     <PackageTags>DiscUtils;Lvm</PackageTags>
+    <Platforms>AnyCPU;x64;x86</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

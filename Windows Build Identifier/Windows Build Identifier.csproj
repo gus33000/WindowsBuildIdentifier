@@ -8,6 +8,7 @@
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <Copyright>Gustave Monce © 2009-2020</Copyright>
     <Description>Identifies Windows builds from various media sources and formats</Description>
+    <Platforms>AnyCPU;ARM32;ARM64;x64;x86</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

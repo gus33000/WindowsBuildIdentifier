@@ -5,6 +5,7 @@
     <Description>DiscUtils Btrfs</Description>
     <Authors>Bianco Veigel</Authors>
     <PackageTags>DiscUtils;Btrfs</PackageTags>
+    <Platforms>AnyCPU;x64;x86</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

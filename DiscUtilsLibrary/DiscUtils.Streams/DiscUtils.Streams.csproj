@@ -5,6 +5,7 @@
     <Description>DiscUtils Streams</Description>
     <Authors>Kenneth Bell;LordMike;Bianco Veigel</Authors>
     <PackageTags>DiscUtils;Streams</PackageTags>
+    <Platforms>AnyCPU;x64;x86</Platforms>
   </PropertyGroup>
 
 </Project>

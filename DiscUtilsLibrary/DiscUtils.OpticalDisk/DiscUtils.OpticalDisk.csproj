@@ -5,6 +5,7 @@
     <Description>DiscUtils OpticalDisk</Description>
     <Authors>Kenneth Bell;LordMike</Authors>
     <PackageTags>DiscUtils;Optical;OpticalDisk</PackageTags>
+    <Platforms>AnyCPU;x64;x86</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

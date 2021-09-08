@@ -6,6 +6,7 @@
     <Description>DiscUtils OpticalDiscSharing</Description>
     <Authors>Kenneth Bell;LordMike</Authors>
     <PackageTags>DiscUtils;OpticalDiscSharing</PackageTags>
+    <Platforms>AnyCPU;x64;x86</Platforms>
   </PropertyGroup>
 
   <ItemGroup>

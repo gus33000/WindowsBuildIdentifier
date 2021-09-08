@@ -5,6 +5,7 @@
     <Description>DiscUtils dmg parser. Works with apple disk (.dmg) files</Description>
     <Authors>Kenneth Bell;LordMike</Authors>
     <PackageTags>DiscUtils;dmg</PackageTags>
+    <Platforms>AnyCPU;x64;x86</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
