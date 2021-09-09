@@ -33,7 +33,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DiscUtilsLibrary\DiscUtils\DiscUtils.csproj" />
+    <ProjectReference Include="..\DiscUtilsLibrary\Library\DiscUtils\DiscUtils.csproj" />
   </ItemGroup>
 
 </Project>
