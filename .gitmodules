@@ -1,0 +1,3 @@
+[submodule "DiscUtilsLibrary"]
+	path = DiscUtilsLibrary
+	url = https://github.com/gus33000/DiscUtils.git
