@@ -183,11 +183,11 @@ namespace WindowsBuildIdentifier
             }
 
             var types = f.Types;
-            var licensings = new HashSet<Licensing> { f.Licensing };
-            var languages = f.LanguageCodes != null ? f.LanguageCodes.ToHashSet() : new HashSet<string>() { "lang-unknown" };
-            var skus = new HashSet<string> { f.Sku.Replace("Server", "") };
-            var baseSkus = new HashSet<string> { f.Sku.Replace("Server", "") };
-            var archs = new HashSet<string> { $"{f.Architecture}{f.BuildType}" };
+            var licensings = new SortedSet<Licensing> { f.Licensing };
+            var languages = new SortedSet<string>(f.LanguageCodes != null ? f.LanguageCodes : new string[] { "lang-unknown" });
+            var skus = new SortedSet<string> { f.Sku.Replace("Server", "") };
+            var baseSkus = new SortedSet<string> { f.Sku.Replace("Server", "") };
+            var archs = new SortedSet<string> { $"{f.Architecture}{f.BuildType}" };
 
             for (int i = 1; i < imageIndexes.Length; i++)
             {
@@ -199,7 +199,7 @@ namespace WindowsBuildIdentifier
                 {
                     licensings.Add(d.Licensing);
                 }
-                languages = languages.Union(d.LanguageCodes).ToHashSet();
+                languages = new SortedSet<string>(languages.Union(d.LanguageCodes));
 
                 if (!skus.Contains(d.Sku.Replace("Server", "")))
                 {
