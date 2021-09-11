@@ -658,24 +658,46 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 try
                 {
                     string productId = "";
+                    bool found = false;
 
-                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion\DefaultProductKey");
+                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
                     if (subkey != null)
                     {
-                        productId = (string)subkey.GetValue("ProductId");
+                        var pidData = subkey.GetValue("DigitalProductId4") as byte[];
+                        if (pidData != null)
+                        {
+                            pidData = pidData[0x3f8..0x458];
+
+                            Span<char> pidString = new char[0x30];
+                            System.Text.Encoding.Unicode.GetChars(pidData, pidString);
+                            pidString = pidString[..pidString.IndexOf('\0')];
+
+                            string licenseType = new string(pidString);
+                            result.Licensing = (Licensing)Enum.Parse(typeof(Licensing), licenseType.Split(':')[0]);
+                            found = true;
+                        }
                     }
-                    else
+
+                    if(!found)
                     {
-                        subkey = hive.Root.OpenSubKey(@"Microsoft\Windows\CurrentVersion");
+                        subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion\DefaultProductKey");
                         if (subkey != null)
                         {
                             productId = (string)subkey.GetValue("ProductId");
                         }
-                    }
+                        else
+                        {
+                            subkey = hive.Root.OpenSubKey(@"Microsoft\Windows\CurrentVersion");
+                            if (subkey != null)
+                            {
+                                productId = (string)subkey.GetValue("ProductId");
+                            }
+                        }
 
-                    if (!string.IsNullOrEmpty(productId))
-                    {
-                        result.Licensing = productId.Contains("OEM") ? Licensing.OEM : Licensing.Retail;
+                        if (!string.IsNullOrEmpty(productId))
+                        {
+                            result.Licensing = productId.Contains("OEM") ? Licensing.OEM : Licensing.Retail;
+                        }
                     }
                 }
                 catch { };
