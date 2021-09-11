@@ -424,6 +424,10 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                         {
                             return (compositionEdition, edition);
                         }
+                        else if (!string.IsNullOrEmpty(edition))
+                        {
+                            return (edition, edition);
+                        }
                     }
                 }
                 catch { }
