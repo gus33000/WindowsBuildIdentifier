@@ -204,7 +204,6 @@ namespace WindowsBuildIdentifier.Identification
             }
 
             provider.Close();
-            wimstream.Dispose();
 
             return results.ToArray();
         }
@@ -645,6 +644,7 @@ namespace WindowsBuildIdentifier.Identification
                 Console.WriteLine(ex.ToString());
             }
 
+            wim.Dispose();
             return result;
         }
 
