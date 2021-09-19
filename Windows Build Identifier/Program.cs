@@ -715,8 +715,7 @@ namespace WindowsBuildIdentifier
 
                             File.WriteAllText(opts.Output, xml);
                         }
-
-                        if (result.Any(x => x.Location.ToLower() == @"\sources\install.esd"))
+                        else if (result.Any(x => x.Location.ToLower() == @"\sources\install.esd"))
                         {
                             var wimtag = result.First(x => x.Location.ToLower() == @"\sources\install.esd");
 
@@ -740,8 +739,31 @@ namespace WindowsBuildIdentifier
 
                             File.WriteAllText(opts.Output, xml);
                         }
+                        else if (result.Any(x => x.Location.ToLower() == @"\sources\boot.wim"))
+                        {
+                            var wimtag = result.First(x => x.Location.ToLower() == @"\sources\boot.wim");
 
-                        if (result.Any(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")))
+                            XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
+                            string xml = "";
+
+                            using (var sww = new StringWriter())
+                            {
+                                XmlWriterSettings settings = new XmlWriterSettings();
+                                settings.Indent = true;
+                                settings.IndentChars = "     ";
+                                settings.NewLineOnAttributes = false;
+                                settings.OmitXmlDeclaration = true;
+
+                                using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                                {
+                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xml = sww.ToString();
+                                }
+                            }
+
+                            File.WriteAllText(opts.Output, xml);
+                        }
+                        else if (result.Any(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")))
                         {
                             var txtsetups = result.Where(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")).Select(x => x.Metadata.WindowsImageIndexes);
 
