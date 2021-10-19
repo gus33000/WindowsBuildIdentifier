@@ -67,7 +67,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 (x.EndsWith(@"\hvax64.exe", StringComparison.InvariantCultureIgnoreCase) // AMD64
                     || x.EndsWith(@"\hvix64.exe", StringComparison.InvariantCultureIgnoreCase) // Intel64
                     || x.EndsWith(@"\hvaa64.exe", StringComparison.InvariantCultureIgnoreCase)) // ARM64
-                && !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase));
+                && x.Contains("System32", StringComparison.InvariantCultureIgnoreCase));
             if (hvEntry != null)
             {
                 hvPath = installProvider.ExpandFile(hvEntry);
