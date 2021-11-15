@@ -1,5 +1,6 @@
 ﻿using DiscUtils;
 using DiscUtils.Iso9660;
+using DiscUtils.Streams;
 using DiscUtils.Udf;
 using DiscUtils.Vfs;
 using SevenZipExtractor;
@@ -11,17 +12,15 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
+using WindowsBuildIdentifier.Identification.InstalledImage;
 using WindowsBuildIdentifier.Interfaces;
+using WindowsBuildIdentifier.XmlFormats;
 
 namespace WindowsBuildIdentifier.Identification
 {
     public class MediaHandler
     {
-        public class UnsupportedWIMException : Exception { }
-
-        public class UnsupportedWIMXmlException : Exception { }
-
-        private static string ExtractWIMXml(ArchiveFile archiveFile)
+        private static string ExtractWimXml(ArchiveFile archiveFile)
         {
             try
             {
@@ -30,74 +29,72 @@ namespace WindowsBuildIdentifier.Identification
                     Entry wimXmlEntry = archiveFile.Entries.First(x => x.FileName == "[1].xml");
 
                     string xml;
-                    using (MemoryStream memoryStream = new MemoryStream())
-                    {
-                        wimXmlEntry.Extract(memoryStream);
+                    using MemoryStream memoryStream = new();
+                    wimXmlEntry.Extract(memoryStream);
 
-                        xml = Encoding.Unicode.GetString(memoryStream.ToArray(), 2, (int)memoryStream.Length - 2);
-                    }
+                    xml = Encoding.Unicode.GetString(memoryStream.ToArray(), 2, (int)memoryStream.Length - 2);
 
                     return xml;
                 }
-                else if (archiveFile.Entries.Any(x => x.FileName == "Windows"))
+
+                if (archiveFile.Entries.Any(x => x.FileName == "Windows"))
                 {
                     return archiveFile.GetArchiveComment();
                 }
 
-                throw new UnsupportedWIMException();
+                throw new UnsupportedWimException();
             }
             catch (SevenZipException)
             {
-                throw new UnsupportedWIMException();
+                throw new UnsupportedWimException();
             }
         }
 
-        private static XmlFormats.WIMXml.WIM GetWIMClassFromXml(string xml)
+        private static WIMXml.WIM GetWimClassFromXml(string xml)
         {
             try
             {
-                XmlSerializer ser = new XmlSerializer(typeof(XmlFormats.WIMXml.WIM));
-                XmlFormats.WIMXml.WIM wim;
-                using (StringReader stream = new StringReader(xml))
-                {
-                    using XmlReader reader = XmlReader.Create(stream);
-                    wim = (XmlFormats.WIMXml.WIM)ser.Deserialize(reader);
-                }
+                XmlSerializer ser = new(typeof(WIMXml.WIM));
+                WIMXml.WIM wim;
+                using StringReader stream = new(xml);
+                using XmlReader reader = XmlReader.Create(stream);
+                wim = (WIMXml.WIM)ser.Deserialize(reader);
+
                 return wim;
             }
             catch (InvalidOperationException)
             {
-                throw new UnsupportedWIMXmlException();
+                throw new UnsupportedWimXmlException();
             }
         }
 
-        private static WindowsImageIndex[] IdentifyWindowsNTFromWIM(Stream wimstream, bool include_pe)
+        private static WindowsImageIndex[] IdentifyWindowsNTFromWim(Stream wimstream, bool includePe)
         {
-            HashSet<WindowsImageIndex> results = new HashSet<WindowsImageIndex>();
+            HashSet<WindowsImageIndex> results = new();
 
             Console.WriteLine("Gathering WIM information XML file");
 
 
-            using ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim);
-            string xml = ExtractWIMXml(archiveFile);
+            using ArchiveFile archiveFile = new(wimstream, SevenZipFormat.Wim);
+            string xml = ExtractWimXml(archiveFile);
 
             Console.WriteLine("Parsing WIM information XML file");
-            XmlFormats.WIMXml.WIM wim = GetWIMClassFromXml(xml);
+            WIMXml.WIM wim = GetWimClassFromXml(xml);
 
             Console.WriteLine($"Found {wim.IMAGE.Length} images in the wim according to the XML");
 
             Console.WriteLine("Evaluating relevant images in the WIM according to the XML");
             int irelevantcount2 = (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("winpe", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0);
+                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0);
 
             Console.WriteLine($"Found {irelevantcount2} irrelevant images in the wim according to the XML");
 
-            var provider = new WIMInstallProviderInterface(archiveFile);
+            WimInstallProviderInterface provider = new(archiveFile);
 
-            foreach (var image in wim.IMAGE)
+            foreach (WIMXml.IMAGE image in wim.IMAGE)
             {
                 Console.WriteLine();
                 Console.WriteLine($"Processing index {image.INDEX}");
@@ -107,32 +104,33 @@ namespace WindowsBuildIdentifier.Identification
                 // skip the image
                 //
                 int irelevantcount = (image.DESCRIPTION != null && image.DESCRIPTION.Contains("winpe", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                    (image.DESCRIPTION != null && image.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                    (image.DESCRIPTION != null && image.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                    (image.DESCRIPTION != null && image.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                    (image.DESCRIPTION != null && image.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0);
+                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0);
 
-                Console.WriteLine($"Index contains {irelevantcount} flags indicating this is a preinstallation environment");
+                Console.WriteLine(
+                    $"Index contains {irelevantcount} flags indicating this is a preinstallation environment");
 
-                if (!include_pe && irelevantcount != 0 && irelevantcount2 < wim.IMAGE.Length)
+                if (!includePe && irelevantcount != 0 && irelevantcount2 < wim.IMAGE.Length)
                 {
                     Console.WriteLine("Skipping this image");
                     continue;
                 }
 
-                string index = wim.IMAGE.Count() == 1 ? null : image.INDEX;
+                string index = wim.IMAGE.Length == 1 ? null : image.INDEX;
 
-                bool WorkaroundForWIMFormatBug = false;
+                bool workaroundForWimFormatBug = false;
 
                 if (index != null && wim.IMAGE[0].INDEX == "0")
                 {
                     if (!archiveFile.Entries.Any(x => x.FileName.StartsWith("0\\")))
                     {
-                        WorkaroundForWIMFormatBug = true;
+                        workaroundForWimFormatBug = true;
                     }
                 }
 
-                if (WorkaroundForWIMFormatBug)
+                if (workaroundForWimFormatBug)
                 {
                     int t = int.Parse(index);
                     index = (++t).ToString();
@@ -142,10 +140,11 @@ namespace WindowsBuildIdentifier.Identification
 
                 provider.SetIndex(index);
 
-                var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+                WindowsImage report = DetectionHandler.IdentifyWindowsNT(provider);
 
                 // fallback
-                if ((string.IsNullOrEmpty(report.Sku) || report.Sku == "TerminalServer") && !string.IsNullOrEmpty(image.FLAGS))
+                if ((string.IsNullOrEmpty(report.Sku) || report.Sku == "TerminalServer") &&
+                    !string.IsNullOrEmpty(image.FLAGS))
                 {
                     Console.WriteLine("WARNING: Falling back to WIM XML for edition gathering");
 
@@ -153,8 +152,10 @@ namespace WindowsBuildIdentifier.Identification
 
                     report.Types = new HashSet<Type>();
 
-                    if ((report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase)) ||
-                    (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("v", StringComparison.InvariantCultureIgnoreCase)))
+                    if (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
+                        report.Sku.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase) ||
+                        report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
+                        report.Sku.EndsWith("v", StringComparison.InvariantCultureIgnoreCase))
                     {
                         if (!report.Types.Contains(Type.ServerV))
                         {
@@ -179,22 +180,25 @@ namespace WindowsBuildIdentifier.Identification
 
                 Common.DisplayReport(report);
 
-                WindowsImageIndex imageIndex = new WindowsImageIndex();
-
-                imageIndex.Name = image.NAME;
-                imageIndex.Description = image.DESCRIPTION;
+                WindowsImageIndex imageIndex = new()
+                {
+                    Name = image.NAME,
+                    Description = image.DESCRIPTION
+                };
 
                 if (image.CREATIONTIME != null)
                 {
-                    var creationtime = Convert.ToInt32(image.CREATIONTIME.HIGHPART, 16) * 4294967296 + Convert.ToInt32(image.CREATIONTIME.LOWPART, 16);
-                    var cTime = DateTime.FromFileTimeUtc(creationtime);
+                    long creationtime = Convert.ToInt32(image.CREATIONTIME.HIGHPART, 16) * 4294967296 +
+                                        Convert.ToInt32(image.CREATIONTIME.LOWPART, 16);
+                    DateTime cTime = DateTime.FromFileTimeUtc(creationtime);
                     imageIndex.CreationTime = cTime.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
                 }
 
                 if (image.LASTMODIFICATIONTIME != null)
                 {
-                    var creationtime = Convert.ToInt32(image.LASTMODIFICATIONTIME.HIGHPART, 16) * 4294967296 + Convert.ToInt32(image.LASTMODIFICATIONTIME.LOWPART, 16);
-                    var cTime = DateTime.FromFileTimeUtc(creationtime);
+                    long creationtime = Convert.ToInt32(image.LASTMODIFICATIONTIME.HIGHPART, 16) * 4294967296 +
+                                        Convert.ToInt32(image.LASTMODIFICATIONTIME.LOWPART, 16);
+                    DateTime cTime = DateTime.FromFileTimeUtc(creationtime);
                     imageIndex.LastModifiedTime = cTime.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
                 }
 
@@ -208,124 +212,139 @@ namespace WindowsBuildIdentifier.Identification
             return results.ToArray();
         }
 
-        private static void IdentifyWindowsNTFromVHD(Stream vhdstream)
+        private static void IdentifyWindowsNTFromVhd(Stream vhdstream)
         {
-            VHDInstallProviderInterface provider = new VHDInstallProviderInterface(vhdstream);
+            VhdInstallProviderInterface provider = new(vhdstream);
 
-            var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+            WindowsImage report = DetectionHandler.IdentifyWindowsNT(provider);
             Common.DisplayReport(report);
         }
 
         private static WindowsImageIndex[] IdentifyWindowsNTFromRootFs(TxtSetupBridge fileSystem)
         {
-            RootFsInstallProviderInterface provider = new RootFsInstallProviderInterface(fileSystem);
+            RootFsInstallProviderInterface provider = new(fileSystem);
 
-            var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+            WindowsImage report = DetectionHandler.IdentifyWindowsNT(provider);
             report.Sku = fileSystem.GetSkuFromTxtSetupMedia(report.BuildNumber);
-            report = InstalledImage.DetectionHandler.FixSkuNames(report, false);
+            report = DetectionHandler.FixSkuNames(report, false);
 
             Common.DisplayReport(report);
 
-            var index = new WindowsImageIndex() { WindowsImage = report };
+            WindowsImageIndex index = new() { WindowsImage = report };
 
-            return new WindowsImageIndex[] { index };
+            return new[] { index };
         }
 
-        private static void IdentifyWindowsNTFromVDI(Stream vhdstream)
+        private static void IdentifyWindowsNTFromVdi(Stream vhdstream)
         {
-            VDIInstallProviderInterface provider = new VDIInstallProviderInterface(vhdstream);
+            VdiInstallProviderInterface provider = new(vhdstream);
 
-            var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+            WindowsImage report = DetectionHandler.IdentifyWindowsNT(provider);
             Common.DisplayReport(report);
         }
 
-        private static void IdentifyWindowsNTFromVMDK(string vhdpath)
+        private static void IdentifyWindowsNTFromVmdk(string vhdpath)
         {
-            VMDKInstallProviderInterface provider = new VMDKInstallProviderInterface(vhdpath);
+            VmdkInstallProviderInterface provider = new(vhdpath);
 
-            var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+            WindowsImage report = DetectionHandler.IdentifyWindowsNT(provider);
             Common.DisplayReport(report);
         }
 
-        private static void IdentifyWindowsNTFromVHDX(Stream vhdstream)
+        private static void IdentifyWindowsNTFromVhdx(Stream vhdstream)
         {
-            VHDXInstallProviderInterface provider = new VHDXInstallProviderInterface(vhdstream);
+            VhdxInstallProviderInterface provider = new(vhdstream);
 
-            var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
+            WindowsImage report = DetectionHandler.IdentifyWindowsNT(provider);
             Common.DisplayReport(report);
         }
 
-        private static FileItem[] HandleFacade(IFileSystem facade, bool Recursivity = false, bool index = false)
+        private static FileItem[] HandleFacade(IFileSystem facade, bool recursivity = false, bool index = false)
         {
-            HashSet<FileItem> result = new HashSet<FileItem>();
+            HashSet<FileItem> result = new();
 
             try
             {
                 if (index)
                 {
                     // add the root to the array
-                    var root = facade.Root;
+                    DiscDirectoryInfo root = facade.Root;
 
                     if (root != null)
                     {
-                        FileItem fileItem3 = new FileItem();
-                        fileItem3.Location = @"\";
+                        FileItem fileItem3 = new()
+                        {
+                            Location = @"\"
+                        };
 
                         Console.WriteLine($"Folder: {fileItem3.Location}");
 
-                        var tmpattribs3 = facade.GetAttributes(fileItem3.Location).ToString();
+                        string tmpattribs3 = facade.GetAttributes(fileItem3.Location).ToString();
                         fileItem3.Attributes = tmpattribs3.Split(", ");
 
-                        fileItem3.LastAccessTime = root.LastAccessTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                        fileItem3.LastWriteTime = root.LastWriteTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                        fileItem3.CreationTime = root.CreationTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem3.LastAccessTime =
+                            root.LastAccessTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem3.LastWriteTime =
+                            root.LastWriteTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem3.CreationTime =
+                            root.CreationTimeUtc.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
 
                         result.Add(fileItem3);
                     }
                     // end of adding root
 
-                    foreach (var item in facade.GetDirectories("", null, SearchOption.AllDirectories))
+                    foreach (string item in facade.GetDirectories("", null, SearchOption.AllDirectories))
                     {
-                        FileItem fileItem = new FileItem();
-                        fileItem.Location = item;
+                        FileItem fileItem = new()
+                        {
+                            Location = item
+                        };
 
                         Console.WriteLine($"Folder: {fileItem.Location}");
 
-                        var tmpattribs = facade.GetAttributes(fileItem.Location).ToString();
+                        string tmpattribs = facade.GetAttributes(fileItem.Location).ToString();
                         fileItem.Attributes = tmpattribs.Split(", ");
 
-                        fileItem.LastAccessTime = facade.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                        fileItem.LastWriteTime = facade.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                        fileItem.CreationTime = facade.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.LastAccessTime = facade.GetLastAccessTimeUtc(fileItem.Location)
+                            .ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.LastWriteTime = facade.GetLastWriteTimeUtc(fileItem.Location)
+                            .ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.CreationTime = facade.GetCreationTimeUtc(fileItem.Location)
+                            .ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
 
                         result.Add(fileItem);
                     }
                 }
 
-                foreach (var item in facade.GetFiles("", null, SearchOption.AllDirectories))
+                foreach (string item in facade.GetFiles("", null, SearchOption.AllDirectories))
                 {
-                    FileItem fileItem = new FileItem();
-                    fileItem.Location = item;
+                    FileItem fileItem = new()
+                    {
+                        Location = item
+                    };
 
                     if (index)
                     {
                         Console.WriteLine($"File: {fileItem.Location}");
 
-                        var tmpattribs = facade.GetAttributes(fileItem.Location).ToString();
+                        string tmpattribs = facade.GetAttributes(fileItem.Location).ToString();
                         fileItem.Attributes = tmpattribs.Split(", ");
 
-                        fileItem.LastAccessTime = facade.GetLastAccessTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                        fileItem.LastWriteTime = facade.GetLastWriteTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
-                        fileItem.CreationTime = facade.GetCreationTimeUtc(fileItem.Location).ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.LastAccessTime = facade.GetLastAccessTimeUtc(fileItem.Location)
+                            .ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.LastWriteTime = facade.GetLastWriteTimeUtc(fileItem.Location)
+                            .ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
+                        fileItem.CreationTime = facade.GetCreationTimeUtc(fileItem.Location)
+                            .ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'");
 
                         fileItem.Size = facade.GetFileLength(fileItem.Location).ToString();
 
                         fileItem.Hash = new Hash();
 
-                        using var file = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
-                        using var md5Prov = MD5.Create();
-                        using var sha1Prov = SHA1.Create();
-                        using var crcProv = new Crc32();
+                        using SparseStream file = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
+                        using MD5 md5Prov = MD5.Create();
+                        using SHA1 sha1Prov = SHA1.Create();
+                        using Crc32 crcProv = new();
 
                         Console.WriteLine("Computing hashes");
 
@@ -343,12 +362,12 @@ namespace WindowsBuildIdentifier.Identification
                         sha1Prov.TransformFinalBlock(buffer, 0, 0);
                         crcProv.TransformFinalBlock(buffer, 0, 0);
 
-                        fileItem.Hash.MD5 = BitConverter.ToString(md5Prov.Hash).Replace("-", "");
-                        fileItem.Hash.SHA1 = BitConverter.ToString(sha1Prov.Hash).Replace("-", "");
-                        fileItem.Hash.CRC32 = BitConverter.ToString(crcProv.Hash).Replace("-", "");
+                        fileItem.Hash.Md5 = BitConverter.ToString(md5Prov.Hash).Replace("-", "");
+                        fileItem.Hash.Sha1 = BitConverter.ToString(sha1Prov.Hash).Replace("-", "");
+                        fileItem.Hash.Crc32 = BitConverter.ToString(crcProv.Hash).Replace("-", "");
                     }
 
-                    var extension = fileItem.Location.Split(".")[^1];
+                    string extension = fileItem.Location.Split(".")[^1];
 
                     switch (extension.ToLower())
                     {
@@ -357,28 +376,39 @@ namespace WindowsBuildIdentifier.Identification
                             {
                                 try
                                 {
-                                    var tempIndexes = IdentifyWindowsFromWIM(facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read), index);
-                                    fileItem.Metadata = new MetaData();
-                                    fileItem.Metadata.WindowsImageIndexes = tempIndexes;
+                                    WindowsImageIndex[] tempIndexes = IdentifyWindowsFromWim(
+                                        facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read), index);
+                                    fileItem.Metadata = new MetaData
+                                    {
+                                        WindowsImageIndexes = tempIndexes
+                                    };
                                 }
-                                catch { };
+                                catch
+                                {
+                                }
                                 break;
                             }
                         case "sif":
                             {
                                 try
                                 {
-                                    if (fileItem.Location.Contains("txtsetup.sif", StringComparison.InvariantCultureIgnoreCase))
+                                    if (fileItem.Location.Contains("txtsetup.sif",
+                                            StringComparison.InvariantCultureIgnoreCase))
                                     {
-                                        var bridge = new TxtSetupBridge(facade, string.Join("\\", fileItem.Location.Split('\\')[0..^1]));
-                                        var tempIndexes = IdentifyWindowsNTFromRootFs(bridge);
+                                        TxtSetupBridge bridge = new(facade,
+                                            string.Join("\\", fileItem.Location.Split('\\')[..^1]));
+                                        WindowsImageIndex[] tempIndexes = IdentifyWindowsNTFromRootFs(bridge);
 
-                                        fileItem.Metadata = new MetaData();
-                                        fileItem.Metadata.WindowsImageIndexes = tempIndexes;
-
+                                        fileItem.Metadata = new MetaData
+                                        {
+                                            WindowsImageIndexes = tempIndexes
+                                        };
                                     }
                                 }
-                                catch (Exception ex) { Console.WriteLine(ex.ToString()); };
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine(ex.ToString());
+                                }
                                 break;
                             }
                         case "mui":
@@ -391,14 +421,15 @@ namespace WindowsBuildIdentifier.Identification
                                 {
                                     try
                                     {
-                                        using var itemstream = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
-                                        using var arch = new ArchiveFile(itemstream, SevenZipFormat.PE);
+                                        using SparseStream itemstream = facade.OpenFile(fileItem.Location, FileMode.Open,
+                                            FileAccess.Read);
+                                        using ArchiveFile arch = new(itemstream, SevenZipFormat.PE);
 
                                         if (arch.Entries.Any(x => x.FileName.EndsWith("version.txt")))
                                         {
-                                            var ver = arch.Entries.First(x => x.FileName.EndsWith("version.txt"));
+                                            Entry ver = arch.Entries.First(x => x.FileName.EndsWith("version.txt"));
 
-                                            using var memread = new MemoryStream();
+                                            using MemoryStream memread = new();
                                             ver.Extract(memread);
 
                                             memread.Seek(0, SeekOrigin.Begin);
@@ -407,10 +438,10 @@ namespace WindowsBuildIdentifier.Identification
 
                                             fileItem.Version = new Version();
 
-                                            var ln = tr.ReadLine();
+                                            string ln = tr.ReadLine();
                                             while (ln != null)
                                             {
-                                                var line = ln.Replace("\0", "");
+                                                string line = ln.Replace("\0", "");
                                                 if (line.Contains("VALUE \"CompanyName\","))
                                                 {
                                                     fileItem.Version.CompanyName = line.Split("\"")[^2];
@@ -448,18 +479,25 @@ namespace WindowsBuildIdentifier.Identification
                                             }
                                         }
                                     }
-                                    catch { };
+                                    catch
+                                    {
+                                    }
                                 }
+
                                 break;
                             }
                     }
 
                     if (index)
+                    {
                         result.Add(fileItem);
+                    }
                     else if (fileItem.Metadata != null && fileItem.Metadata.WindowsImageIndexes != null)
+                    {
                         result.Add(fileItem);
+                    }
 
-                    if (index && Recursivity)
+                    if (index && recursivity)
                     {
                         switch (extension.ToLower())
                         {
@@ -468,13 +506,14 @@ namespace WindowsBuildIdentifier.Identification
                                 {
                                     try
                                     {
-                                        using var wimstrm = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
-                                        using var arch = new ArchiveFile(wimstrm, SevenZipFormat.Wim);
-                                        var wimparsed = new ArchiveBridge(arch);
+                                        using SparseStream wimstrm = facade.OpenFile(fileItem.Location, FileMode.Open,
+                                            FileAccess.Read);
+                                        using ArchiveFile arch = new(wimstrm, SevenZipFormat.Wim);
+                                        ArchiveBridge wimparsed = new(arch);
 
-                                        var res = HandleFacade(wimparsed);
+                                        FileItem[] res = HandleFacade(wimparsed);
 
-                                        var res2 = res.Select(x =>
+                                        IEnumerable<FileItem> res2 = res.Select(x =>
                                         {
                                             x.Location = fileItem.Location + @"\" + x.Location;
                                             return x;
@@ -486,6 +525,7 @@ namespace WindowsBuildIdentifier.Identification
                                     {
                                         Console.WriteLine(ex.ToString());
                                     }
+
                                     break;
                                 }
                             case "mui":
@@ -496,13 +536,14 @@ namespace WindowsBuildIdentifier.Identification
                                 {
                                     try
                                     {
-                                        using var pestrm = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
-                                        using var arch = new ArchiveFile(pestrm, SevenZipFormat.PE);
-                                        var peparsed = new ArchiveBridge(arch);
+                                        using SparseStream pestrm = facade.OpenFile(fileItem.Location, FileMode.Open,
+                                            FileAccess.Read);
+                                        using ArchiveFile arch = new(pestrm, SevenZipFormat.PE);
+                                        ArchiveBridge peparsed = new(arch);
 
-                                        var res = HandleFacade(peparsed);
+                                        FileItem[] res = HandleFacade(peparsed);
 
-                                        var res2 = res.Select(x =>
+                                        IEnumerable<FileItem> res2 = res.Select(x =>
                                         {
                                             x.Location = fileItem.Location + @"\" + x.Location;
                                             return x;
@@ -514,6 +555,7 @@ namespace WindowsBuildIdentifier.Identification
                                     {
                                         Console.WriteLine(ex.ToString());
                                     }
+
                                     break;
                                 }
                             case "iso":
@@ -521,7 +563,8 @@ namespace WindowsBuildIdentifier.Identification
                                 {
                                     try
                                     {
-                                        using var isoStream = facade.OpenFile(fileItem.Location, FileMode.Open, FileAccess.Read);
+                                        using SparseStream isoStream = facade.OpenFile(fileItem.Location, FileMode.Open,
+                                            FileAccess.Read);
 
                                         VfsFileSystemFacade cd = new CDReader(isoStream, true);
                                         if (cd.FileExists(@"README.TXT"))
@@ -529,9 +572,9 @@ namespace WindowsBuildIdentifier.Identification
                                             cd = new UdfReader(isoStream);
                                         }
 
-                                        var res = HandleFacade(cd);
+                                        FileItem[] res = HandleFacade(cd);
 
-                                        var res2 = res.Select(x =>
+                                        IEnumerable<FileItem> res2 = res.Select(x =>
                                         {
                                             x.Location = fileItem.Location + @"\" + x.Location;
                                             return x;
@@ -560,9 +603,9 @@ namespace WindowsBuildIdentifier.Identification
             return result.OrderBy(x => x.Location).ToArray();
         }
 
-        public static FileItem[] IdentifyWindowsFromISO(string isopath, bool deep, bool index)
+        public static FileItem[] IdentifyWindowsFromIso(string isopath, bool deep, bool index)
         {
-            FileItem[] result = new FileItem[0];
+            FileItem[] result = Array.Empty<FileItem>();
 
             Console.WriteLine();
             Console.WriteLine("Opening ISO File");
@@ -589,9 +632,9 @@ namespace WindowsBuildIdentifier.Identification
             return result;
         }
 
-        public static FileItem[] IdentifyWindowsFromMDF(string isopath, bool deep, bool index)
+        public static FileItem[] IdentifyWindowsFromMdf(string isopath, bool deep, bool index)
         {
-            FileItem[] result = new FileItem[0];
+            FileItem[] result = Array.Empty<FileItem>();
 
             Console.WriteLine();
             Console.WriteLine("Opening MDF File");
@@ -618,9 +661,9 @@ namespace WindowsBuildIdentifier.Identification
             return result;
         }
 
-        public static WindowsImageIndex[] IdentifyWindowsFromWIM(Stream wim, bool include_pe)
+        public static WindowsImageIndex[] IdentifyWindowsFromWim(Stream wim, bool includePe)
         {
-            WindowsImageIndex[] result = new WindowsImageIndex[0];
+            WindowsImageIndex[] result = Array.Empty<WindowsImageIndex>();
 
             try
             {
@@ -628,9 +671,9 @@ namespace WindowsBuildIdentifier.Identification
                 // If this succeeds we are processing a properly supported final (or near final)
                 // WIM file format, so we use the adequate function to handle it.
                 //
-                result = IdentifyWindowsNTFromWIM(wim, include_pe);
+                result = IdentifyWindowsNTFromWim(wim, includePe);
             }
-            catch (UnsupportedWIMException)
+            catch (UnsupportedWimException)
             {
                 //
                 // If this fails we are processing an early
@@ -648,7 +691,7 @@ namespace WindowsBuildIdentifier.Identification
             return result;
         }
 
-        public static void IdentifyWindowsFromVHD(string vhdpath)
+        public static void IdentifyWindowsFromVhd(string vhdpath)
         {
             Console.WriteLine();
             Console.WriteLine("Opening VHD File");
@@ -656,7 +699,7 @@ namespace WindowsBuildIdentifier.Identification
             try
             {
                 using FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read);
-                IdentifyWindowsNTFromVHD(vhdStream);
+                IdentifyWindowsNTFromVhd(vhdStream);
             }
             catch (Exception ex)
             {
@@ -665,14 +708,14 @@ namespace WindowsBuildIdentifier.Identification
             }
         }
 
-        public static void IdentifyWindowsFromVMDK(string vhdpath)
+        public static void IdentifyWindowsFromVmdk(string vhdpath)
         {
             Console.WriteLine();
             Console.WriteLine("Opening VMDK File");
             Console.WriteLine(vhdpath);
             try
             {
-                IdentifyWindowsNTFromVMDK(vhdpath);
+                IdentifyWindowsNTFromVmdk(vhdpath);
             }
             catch (NullReferenceException)
             {
@@ -685,7 +728,7 @@ namespace WindowsBuildIdentifier.Identification
             }
         }
 
-        public static void IdentifyWindowsFromVHDX(string vhdpath)
+        public static void IdentifyWindowsFromVhdx(string vhdpath)
         {
             Console.WriteLine();
             Console.WriteLine("Opening VHDX File");
@@ -693,7 +736,7 @@ namespace WindowsBuildIdentifier.Identification
             try
             {
                 using FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read);
-                IdentifyWindowsNTFromVHDX(vhdStream);
+                IdentifyWindowsNTFromVhdx(vhdStream);
             }
             catch (Exception ex)
             {
@@ -702,7 +745,7 @@ namespace WindowsBuildIdentifier.Identification
             }
         }
 
-        public static void IdentifyWindowsFromVDI(string vhdpath)
+        public static void IdentifyWindowsFromVdi(string vhdpath)
         {
             Console.WriteLine();
             Console.WriteLine("Opening VDI File");
@@ -710,13 +753,21 @@ namespace WindowsBuildIdentifier.Identification
             try
             {
                 using FileStream vhdStream = File.Open(vhdpath, FileMode.Open, FileAccess.Read);
-                IdentifyWindowsNTFromVDI(vhdStream);
+                IdentifyWindowsNTFromVdi(vhdStream);
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Fail");
                 Console.WriteLine(ex.ToString());
             }
+        }
+
+        public class UnsupportedWimException : Exception
+        {
+        }
+
+        public class UnsupportedWimXmlException : Exception
+        {
         }
     }
 }

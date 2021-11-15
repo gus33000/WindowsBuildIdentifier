@@ -1,11 +1,13 @@
 ﻿using DiscUtils;
+using DiscUtils.Streams;
 using System.IO;
 
 namespace WindowsBuildIdentifier.Interfaces
 {
-    public class RootFsInstallProviderInterface : WindowsInstallProviderInterface
+    public class RootFsInstallProviderInterface : IWindowsInstallProviderInterface
     {
-        private IFileSystem _fileSystem;
+        private readonly IFileSystem _fileSystem;
+
         public RootFsInstallProviderInterface(IFileSystem fileSystem)
         {
             _fileSystem = fileSystem;
@@ -13,17 +15,14 @@ namespace WindowsBuildIdentifier.Interfaces
 
         public void Close()
         {
-            
         }
 
-        public string ExpandFile(string Entry)
+        public string ExpandFile(string entry)
         {
-            var tmp = Path.GetTempFileName();
-            using (var srcstrm = _fileSystem.OpenFile(Entry, FileMode.Open))
-            {
-                using var dststrm = new FileStream(tmp, FileMode.Append);
-                srcstrm.CopyTo(dststrm);
-            }
+            string tmp = Path.GetTempFileName();
+            using SparseStream srcstrm = _fileSystem.OpenFile(entry, FileMode.Open);
+            using FileStream dststrm = new(tmp, FileMode.Append);
+            srcstrm.CopyTo(dststrm);
 
             return tmp;
         }

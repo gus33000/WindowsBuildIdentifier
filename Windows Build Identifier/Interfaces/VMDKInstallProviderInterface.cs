@@ -1,23 +1,24 @@
-﻿using DiscUtils.Vmdk;
-using DiscUtils.Ntfs;
+﻿using DiscUtils.Ntfs;
 using DiscUtils.Partitions;
+using DiscUtils.Streams;
+using DiscUtils.Vmdk;
 using System.IO;
 
 namespace WindowsBuildIdentifier.Interfaces
 {
-    public class VMDKInstallProviderInterface : WindowsInstallProviderInterface
+    public class VmdkInstallProviderInterface : IWindowsInstallProviderInterface
     {
-        private readonly string _vhdpath;
-        private readonly Disk _vhd;
         private readonly NtfsFileSystem _ntfs;
+        private readonly Disk _vhd;
+        private readonly string _vhdpath;
 
-        public VMDKInstallProviderInterface(string vhdpath)
+        public VmdkInstallProviderInterface(string vhdpath)
         {
             _vhdpath = vhdpath;
             _vhd = new Disk(vhdpath, FileAccess.Read);
 
             PartitionInfo part = null;
-            foreach (var partition in _vhd.Partitions.Partitions)
+            foreach (PartitionInfo partition in _vhd.Partitions.Partitions)
             {
                 if (part == null)
                 {
@@ -40,14 +41,12 @@ namespace WindowsBuildIdentifier.Interfaces
             _vhd.Dispose();
         }
 
-        public string ExpandFile(string Entry)
+        public string ExpandFile(string entry)
         {
-            var tmp = Path.GetTempFileName();
-            using (var srcstrm = _ntfs.OpenFile(Entry, FileMode.Open))
-            {
-                using var dststrm = new FileStream(tmp, FileMode.Append);
-                srcstrm.CopyTo(dststrm);
-            }
+            string tmp = Path.GetTempFileName();
+            using SparseStream srcstrm = _ntfs.OpenFile(entry, FileMode.Open);
+            using FileStream dststrm = new(tmp, FileMode.Append);
+            srcstrm.CopyTo(dststrm);
 
             return tmp;
         }

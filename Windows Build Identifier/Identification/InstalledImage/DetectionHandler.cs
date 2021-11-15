@@ -20,23 +20,25 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+using DiscUtils.Registry;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using WindowsBuildIdentifier.Interfaces;
 
 namespace WindowsBuildIdentifier.Identification.InstalledImage
 {
     public class DetectionHandler
     {
-        public static WindowsImage IdentifyWindowsNT(WindowsInstallProviderInterface installProvider)
+        public static WindowsImage IdentifyWindowsNT(IWindowsInstallProviderInterface installProvider)
         {
-            WindowsImage report = new WindowsImage();
+            WindowsImage report = new();
 
-            var fileentries = installProvider.GetFileSystemEntries();
+            string[] fileentries = installProvider.GetFileSystemEntries();
 
             //
             // We need a few files from the install to gather enough information
@@ -55,52 +57,58 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             string systemHivePath = "";
             string userPath = "";
 
-            var kernelEntry = fileentries.FirstOrDefault(x =>
-                (x.EndsWith(@"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase) || x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase))
+            string kernelEntry = fileentries.FirstOrDefault(x =>
+                (x.EndsWith(@"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase) ||
+                 x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase))
                 && x.Contains("System32", StringComparison.InvariantCultureIgnoreCase));
             if (kernelEntry != null)
             {
                 kernelPath = installProvider.ExpandFile(kernelEntry);
             }
 
-            var hvEntry = fileentries.FirstOrDefault(x =>
+            string hvEntry = fileentries.FirstOrDefault(x =>
                 (x.EndsWith(@"\hvax64.exe", StringComparison.InvariantCultureIgnoreCase) // AMD64
-                    || x.EndsWith(@"\hvix64.exe", StringComparison.InvariantCultureIgnoreCase) // Intel64
-                    || x.EndsWith(@"\hvaa64.exe", StringComparison.InvariantCultureIgnoreCase)) // ARM64
+                 || x.EndsWith(@"\hvix64.exe", StringComparison.InvariantCultureIgnoreCase) // Intel64
+                 || x.EndsWith(@"\hvaa64.exe", StringComparison.InvariantCultureIgnoreCase)) // ARM64
                 && x.Contains("System32", StringComparison.InvariantCultureIgnoreCase));
             if (hvEntry != null)
             {
                 hvPath = installProvider.ExpandFile(hvEntry);
             }
 
-            var shell32Entry = fileentries.FirstOrDefault(x => x.EndsWith(@"system32\shell32.dll", StringComparison.InvariantCultureIgnoreCase));
+            string shell32Entry = fileentries.FirstOrDefault(x =>
+                x.EndsWith(@"system32\shell32.dll", StringComparison.InvariantCultureIgnoreCase));
             if (shell32Entry != null)
             {
                 shell32Path = installProvider.ExpandFile(shell32Entry);
             }
 
-            var softwareHiveEntry = fileentries.FirstOrDefault(x => x.EndsWith(@"system32\config\software", StringComparison.InvariantCultureIgnoreCase));
+            string softwareHiveEntry = fileentries.FirstOrDefault(x =>
+                x.EndsWith(@"system32\config\software", StringComparison.InvariantCultureIgnoreCase));
             if (softwareHiveEntry != null)
             {
                 softwareHivePath = installProvider.ExpandFile(softwareHiveEntry);
             }
 
-            var systemHiveEntry = fileentries.FirstOrDefault(x => x.EndsWith(@"system32\config\system", StringComparison.InvariantCultureIgnoreCase));
+            string systemHiveEntry = fileentries.FirstOrDefault(x =>
+                x.EndsWith(@"system32\config\system", StringComparison.InvariantCultureIgnoreCase));
             if (systemHiveEntry != null)
             {
                 systemHivePath = installProvider.ExpandFile(systemHiveEntry);
             }
 
-            var userEntry = fileentries.FirstOrDefault(x => x.EndsWith(@"\system32\user.exe", StringComparison.InvariantCultureIgnoreCase));
+            string userEntry = fileentries.FirstOrDefault(x =>
+                x.EndsWith(@"\system32\user.exe", StringComparison.InvariantCultureIgnoreCase));
             if (userEntry != null)
             {
                 userPath = installProvider.ExpandFile(userEntry);
             }
 
             #region Version Gathering
-            VersionInfo1 info = new VersionInfo1();
-            VersionInfo2 info2 = new VersionInfo2();
-            VersionInfo1 info3 = new VersionInfo1();
+
+            VersionInfo1 info = new();
+            VersionInfo2 info2 = new();
+            VersionInfo1 info3 = new();
 
             if (!string.IsNullOrEmpty(kernelPath))
             {
@@ -112,9 +120,12 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
                 if (report.Architecture == MachineType.x86)
                 {
-                    var possibleNec98 = fileentries.FirstOrDefault(x => x.Contains(@"system32\hal98", StringComparison.InvariantCultureIgnoreCase));
+                    string possibleNec98 = fileentries.FirstOrDefault(x =>
+                        x.Contains(@"system32\hal98", StringComparison.InvariantCultureIgnoreCase));
                     if (possibleNec98 != null)
+                    {
                         report.Architecture = MachineType.nec98;
+                    }
                 }
             }
 
@@ -143,25 +154,29 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                     infover = FileVersionInfo.GetVersionInfo(shell32Path);
                 }
 
-                var cultures = CultureInfo.GetCultures(CultureTypes.AllCultures);
-                foreach (var culture in cultures)
+                CultureInfo[] cultures = CultureInfo.GetCultures(CultureTypes.AllCultures);
+                foreach (CultureInfo culture in cultures)
                 {
                     if (culture.EnglishName == infover.Language)
                     {
-                        report.LanguageCodes = new string[] { culture.Name };
+                        report.LanguageCodes = new[] { culture.Name };
                         break;
                     }
                 }
             }
 
             if (!string.IsNullOrEmpty(kernelPath))
+            {
                 File.Delete(kernelPath);
+            }
 
             if (!string.IsNullOrEmpty(hvPath))
+            {
                 File.Delete(hvPath);
+            }
 
-            WindowsVersion correctVersion = Common.GetGreaterVersion(info.version, info2.version);
-            correctVersion = Common.GetGreaterVersion(correctVersion, info3.version);
+            WindowsVersion correctVersion = Common.GetGreaterVersion(info.Version, info2.Version);
+            correctVersion = Common.GetGreaterVersion(correctVersion, info3.Version);
 
             if (correctVersion != null)
             {
@@ -177,9 +192,10 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             // do not report the same versions in all binaries
             if (report.BuildNumber < 1130)
             {
-                Console.WriteLine("Determined the reported build number was unreliable. Checking a few more binaries...");
+                Console.WriteLine(
+                    "Determined the reported build number was unreliable. Checking a few more binaries...");
                 ulong buildwindow = report.BuildNumber + 50;
-                foreach (var binary in installProvider.GetFileSystemEntries())
+                foreach (string binary in installProvider.GetFileSystemEntries())
                 {
                     if (binary.EndsWith(".dll", StringComparison.InvariantCultureIgnoreCase) ||
                         binary.EndsWith(".exe", StringComparison.InvariantCultureIgnoreCase) ||
@@ -189,18 +205,23 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                         try
                         {
                             file = installProvider.ExpandFile(binary);
-                            var verinfo = ExtractVersionInfo(file);
+                            VersionInfo1 verinfo = ExtractVersionInfo(file);
 
-                            if (verinfo.version != null && verinfo.version.MajorVersion == report.MajorVersion && verinfo.version.MinorVersion == report.MinorVersion &&
-                                verinfo.version.BuildNumber < buildwindow && report.BuildNumber < verinfo.version.BuildNumber) // allow a gap of 50 builds max
+                            if (verinfo.Version != null && verinfo.Version.MajorVersion == report.MajorVersion &&
+                                verinfo.Version.MinorVersion == report.MinorVersion &&
+                                verinfo.Version.BuildNumber < buildwindow &&
+                                report.BuildNumber < verinfo.Version.BuildNumber) // allow a gap of 50 builds max
                             {
-                                Console.WriteLine("File with newer version found: " + binary + " => " + verinfo.version.BuildNumber);
+                                Console.WriteLine("File with newer version found: " + binary + " => " +
+                                                  verinfo.Version.BuildNumber);
 
-                                report.BuildNumber = verinfo.version.BuildNumber;
-                                report.DeltaVersion = verinfo.version.DeltaVersion;
+                                report.BuildNumber = verinfo.Version.BuildNumber;
+                                report.DeltaVersion = verinfo.Version.DeltaVersion;
                             }
                         }
-                        catch { }
+                        catch
+                        {
+                        }
                         finally
                         {
                             if (!string.IsNullOrEmpty(file) && File.Exists(file))
@@ -208,9 +229,12 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                                 try
                                 {
                                     File.Delete(file);
-                                } catch { };
+                                }
+                                catch
+                                {
+                                }
                             }
-                        };
+                        }
                     }
                 }
             }
@@ -218,9 +242,11 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             #endregion
 
             #region Edition Gathering
-            bool IsUnstaged = fileentries.Any(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
 
-            if (IsUnstaged)
+            bool isUnstaged =
+                fileentries.Any(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
+
+            if (isUnstaged)
             {
                 report.Sku = "Unstaged";
 
@@ -231,49 +257,55 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             }
             else if (fileentries.Contains(@"InstalledRepository\Windows.config"))
             {
-                var packageFile = installProvider.ExpandFile(@"InstalledRepository\Windows.config");
+                string packageFile = installProvider.ExpandFile(@"InstalledRepository\Windows.config");
 
-                using (var fileStream = File.OpenRead(packageFile))
-                using (var streamReader = new StreamReader(fileStream))
+                using FileStream fileStream = File.OpenRead(packageFile);
+                using StreamReader streamReader = new(fileStream);
+                string line = "";
+
+                while (!line.Contains("configurationIdentity"))
                 {
-                    string line = "";
-
-                    while (!line.Contains("configurationIdentity"))
-                        line = streamReader.ReadLine();
-
-                    var editionPackageName = line.Split("name=\"")[1].Split("\"")[0];
-
-                    var editionName = string.Join("", editionPackageName.Split(" ")[1..^0]);
-                    if (editionName == "Server")
-                    {
-                        editionName = "ServerStandard";
-                    }
-
-                    report.Sku = editionName;
+                    line = streamReader.ReadLine();
                 }
+
+                string editionPackageName = line.Split("name=\"")[1].Split("\"")[0];
+
+                string editionName = string.Join("", editionPackageName.Split(" ")[1..]);
+                if (editionName == "Server")
+                {
+                    editionName = "ServerStandard";
+                }
+
+                report.Sku = editionName;
 
                 File.Delete(packageFile);
             }
             else if (!string.IsNullOrEmpty(systemHivePath))
             {
                 Console.WriteLine("Extracting additional edition information");
-                var skuData = ExtractEditionFromRegistry(systemHivePath, softwareHivePath);
-                report.BaseSku = skuData.baseSku;
-                report.Sku = skuData.sku;
+                (string baseSku, string sku) = ExtractEditionFromRegistry(systemHivePath, softwareHivePath);
+                report.BaseSku = baseSku;
+                report.Sku = sku;
             }
+
             #endregion
 
             if (!string.IsNullOrEmpty(softwareHivePath))
+            {
                 File.Delete(softwareHivePath);
-            if (!string.IsNullOrEmpty(systemHivePath))
-                File.Delete(systemHivePath);
+            }
 
-            report = FixSkuNames(report, IsUnstaged);
+            if (!string.IsNullOrEmpty(systemHivePath))
+            {
+                File.Delete(systemHivePath);
+            }
+
+            report = FixSkuNames(report, isUnstaged);
 
             return report;
         }
 
-        public static WindowsImage FixSkuNames(WindowsImage report, bool IsUnstaged)
+        public static WindowsImage FixSkuNames(WindowsImage report, bool isUnstaged)
         {
             if (!string.IsNullOrEmpty(report.Sku))
             {
@@ -306,12 +338,14 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 }
             }
 
-            if (IsUnstaged && report.Editions != null)
+            if (isUnstaged && report.Editions != null)
             {
-                foreach (var skuunstaged in report.Editions)
+                foreach (string skuunstaged in report.Editions)
                 {
-                    if ((skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase) && skuunstaged.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase)) ||
-                        (skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase) && skuunstaged.EndsWith("v", StringComparison.InvariantCultureIgnoreCase)))
+                    if (skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
+                        skuunstaged.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase) ||
+                        skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
+                        skuunstaged.EndsWith("v", StringComparison.InvariantCultureIgnoreCase))
                     {
                         if (!report.Types.Contains(Type.ServerV))
                         {
@@ -346,8 +380,10 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                     report.Sku = "Professional";
                 }
 
-                if ((report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase)) ||
-                    (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) && report.Sku.EndsWith("v", StringComparison.InvariantCultureIgnoreCase)))
+                if (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
+                    report.Sku.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase) ||
+                    report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
+                    report.Sku.EndsWith("v", StringComparison.InvariantCultureIgnoreCase))
                 {
                     if (!report.Types.Contains(Type.ServerV))
                     {
@@ -375,7 +411,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
         private static VersionInfo1 ExtractVersionInfo(string kernelPath)
         {
-            VersionInfo1 result = new VersionInfo1();
+            VersionInfo1 result = new();
 
             FileVersionInfo info = FileVersionInfo.GetVersionInfo(kernelPath);
 
@@ -385,19 +421,19 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             }
             catch
             {
-
             }
 
-            var ver = info.FileVersion;
+            string ver = info.FileVersion;
 
             if (ver != null)
             {
                 if (ver.Count(x => x == '.') < 4)
                 {
-                    ver = info.FileMajorPart + "." + info.FileMinorPart + "." + info.FileBuildPart + "." + info.FilePrivatePart;
+                    ver = info.FileMajorPart + "." + info.FileMinorPart + "." + info.FileBuildPart + "." +
+                          info.FilePrivatePart;
                 }
 
-                result.version = Common.ParseBuildString(ver);
+                result.Version = Common.ParseBuildString(ver);
             }
 
             result.BuildType = info.IsDebug ? BuildType.chk : BuildType.fre;
@@ -405,237 +441,244 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             return result;
         }
 
-        private static (string baseSku, string sku) ExtractEditionFromRegistry(string systemHivePath, string softwareHivePath)
+        private static (string baseSku, string sku) ExtractEditionFromRegistry(string systemHivePath,
+            string softwareHivePath)
         {
             (string baseSku, string sku) ret = ("", "");
 
-            using (var softHiveStream = new FileStream(softwareHivePath, FileMode.Open, FileAccess.Read))
-            using (DiscUtils.Registry.RegistryHive softHive = new DiscUtils.Registry.RegistryHive(softHiveStream))
+            using (FileStream softHiveStream = new(softwareHivePath, FileMode.Open, FileAccess.Read))
+            using (RegistryHive softHive = new(softHiveStream))
             {
                 try
                 {
-                    DiscUtils.Registry.RegistryKey subkey = softHive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
+                    RegistryKey subkey = softHive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
                     if (subkey != null)
                     {
-                        var edition = subkey.GetValue("EditionID") as string;
-                        var compositionEdition = subkey.GetValue("CompositionEditionID") as string;
+                        string edition = subkey.GetValue("EditionID") as string;
+                        string compositionEdition = subkey.GetValue("CompositionEditionID") as string;
 
                         if (!string.IsNullOrEmpty(edition) && !string.IsNullOrEmpty(compositionEdition))
                         {
                             return (compositionEdition, edition);
                         }
-                        else if (!string.IsNullOrEmpty(edition))
+
+                        if (!string.IsNullOrEmpty(edition))
                         {
                             return (edition, edition);
                         }
                     }
                 }
-                catch { }
+                catch
+                {
+                }
             }
 
-            using (var hiveStream = new FileStream(systemHivePath, FileMode.Open, FileAccess.Read))
-            using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
+            using FileStream hiveStream = new(systemHivePath, FileMode.Open, FileAccess.Read);
+            using RegistryHive hive = new(hiveStream);
+            try
+            {
+                RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
+
+                byte[] prodpol = (byte[])subkey.GetValue("ProductPolicy");
+                PolicyValue[] policies = Common.ParseProductPolicy(prodpol);
+
+                PolicyValue pol = policies.FirstOrDefault(x => x.Name == "Kernel-ProductInfo");
+                if (pol != null && pol.Type == 4)
+                {
+                    int product = BitConverter.ToInt32(pol.Data);
+                    Console.WriteLine("Detected product id: " + product);
+
+                    if (Enum.IsDefined(typeof(Product), product))
+                    {
+                        ret.baseSku = Enum.GetName(typeof(Product), product);
+                    }
+                    else
+                    {
+                        ret.baseSku = $"UnknownAdditional{product:X}";
+                    }
+
+                    ret.sku = ret.baseSku;
+                    Console.WriteLine("Base SKU: " + ret.baseSku);
+                }
+
+                pol = policies.FirstOrDefault(x => x.Name == "Kernel-BrandingInfo");
+                if (pol != null && pol.Type == 4)
+                {
+                    int product = BitConverter.ToInt32(pol.Data);
+                    Console.WriteLine("Detected product id: " + product);
+
+                    if (Enum.IsDefined(typeof(Product), product))
+                    {
+                        ret.sku = Enum.GetName(typeof(Product), product);
+                    }
+                    else
+                    {
+                        ret.sku = $"UnknownAdditional{product:X}";
+                    }
+
+                    if (string.IsNullOrEmpty(ret.baseSku))
+                    {
+                        ret.baseSku = ret.sku;
+                    }
+
+                    Console.WriteLine("Branding SKU: " + ret.sku);
+                }
+
+                return ret;
+            }
+            catch
+            {
+            }
+
+            string sku = "";
+            if (string.IsNullOrEmpty(sku))
             {
                 try
                 {
-                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
+                    RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
 
-                    var prodpol = (byte[])subkey.GetValue("ProductPolicy");
-                    var policies = Common.ParseProductPolicy(prodpol);
+                    string[] list = (string[])subkey.GetValue("ProductSuite");
 
-                    var pol = policies.FirstOrDefault(x => x.Name == "Kernel-ProductInfo");
-                    if (pol != null && pol.Type == 4)
+                    sku = list.Length > 0 ? list[0] : "";
+                    if (string.IsNullOrEmpty(sku))
                     {
-                        int product = BitConverter.ToInt32(pol.Data);
-                        Console.WriteLine("Detected product id: " + product);
-
-                        if (Enum.IsDefined(typeof(Product), product))
-                        {
-                            ret.baseSku = Enum.GetName(typeof(Product), product);
-                        }
-                        else
-                        {
-                            ret.baseSku = $"UnknownAdditional{product.ToString("X")}";
-                        }
-
-                        ret.sku = ret.baseSku;
-                        Console.WriteLine("Base SKU: " + ret.baseSku);
+                        sku = "Workstation";
                     }
 
-                    pol = policies.FirstOrDefault(x => x.Name == "Kernel-BrandingInfo");
-                    if (pol != null && pol.Type == 4)
+                    sku = sku.Replace(" ", "");
+
+                    switch (sku.ToLower())
                     {
-                        int product = BitConverter.ToInt32(pol.Data);
-                        Console.WriteLine("Detected product id: " + product);
-
-                        if (Enum.IsDefined(typeof(Product), product))
-                        {
-                            ret.sku = Enum.GetName(typeof(Product), product);
-                        }
-                        else
-                        {
-                            ret.sku = $"UnknownAdditional{product.ToString("X")}";
-                        }
-
-                        if (string.IsNullOrEmpty(ret.baseSku))
-                        {
-                            ret.baseSku = ret.sku;
-                        }
-
-                        Console.WriteLine("Branding SKU: " + ret.sku);
+                        case "enterprise":
+                        case "backoffice":
+                        case "datacenter":
+                        case "securityappliance":
+                            {
+                                sku += "Server";
+                                break;
+                            }
+                        case "whserver":
+                            {
+                                sku = "HomeServer";
+                                break;
+                            }
+                        case "smallbusiness":
+                            {
+                                sku = "SmallBusinessServer";
+                                break;
+                            }
+                        case "smallbusiness(restricted)":
+                            {
+                                sku = "SmallBusinessServerRestricted";
+                                break;
+                            }
+                        case "blade":
+                            {
+                                sku = "ServerWeb";
+                                break;
+                            }
+                        case "embeddednt":
+                            {
+                                sku = "Embedded";
+                                break;
+                            }
+                        case "embedded(restricted)":
+                            {
+                                sku = "EmbeddedRestricted";
+                                break;
+                            }
                     }
-
-                    return ret;
                 }
-                catch { };
-
-                string sku = "";
-                if (string.IsNullOrEmpty(sku))
+                catch
                 {
-                    try
-                    {
-                        DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
-
-                        string[] list = (string[])subkey.GetValue("ProductSuite");
-
-                        sku = list.Length > 0 ? list[0] : "";
-                        if (string.IsNullOrEmpty(sku))
-                        {
-                            sku = "Workstation";
-                        }
-
-                        sku = sku.Replace(" ", "");
-
-                        switch (sku.ToLower())
-                        {
-                            case "enterprise":
-                            case "backoffice":
-                            case "datacenter":
-                            case "securityappliance":
-                                {
-                                    sku = sku + "Server";
-                                    break;
-                                }
-                            case "whserver":
-                                {
-                                    sku = "HomeServer";
-                                    break;
-                                }
-                            case "smallbusiness":
-                                {
-                                    sku = "SmallBusinessServer";
-                                    break;
-                                }
-                            case "smallbusiness(restricted)":
-                                {
-                                    sku = "SmallBusinessServerRestricted";
-                                    break;
-                                }
-                            case "blade":
-                                {
-                                    sku = "ServerWeb";
-                                    break;
-                                }
-                            case "embeddednt":
-                                {
-                                    sku = "Embedded";
-                                    break;
-                                }
-                            case "embedded(restricted)":
-                                {
-                                    sku = "EmbeddedRestricted";
-                                    break;
-                                }
-                        }
-                    }
-                    catch { };
                 }
-
-                return (sku, sku);
             }
 
+            return (sku, sku);
         }
 
         private static VersionInfo2 ExtractVersionInfo2(string softwareHivePath, string systemHivePath, string hvPath)
         {
-            VersionInfo2 result = new VersionInfo2();
+            VersionInfo2 result = new()
+            {
+                Version = new WindowsVersion()
+            };
 
-            result.version = new WindowsVersion();
-
-            using (var hiveStream = new FileStream(softwareHivePath, FileMode.Open, FileAccess.Read))
-            using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
+            using (FileStream hiveStream = new(softwareHivePath, FileMode.Open, FileAccess.Read))
+            using (RegistryHive hive = new(hiveStream))
             {
                 try
                 {
-                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
+                    RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
 
                     string buildLab = (string)subkey.GetValue("BuildLab");
                     string buildLabEx = (string)subkey.GetValue("BuildLabEx");
 
                     string releaseId = (string)subkey.GetValue("ReleaseId");
 
-                    int? Major = (int?)subkey.GetValue("CurrentMajorVersionNumber");
-                    string Build = (string)subkey.GetValue("CurrentBuildNumber");
-                    int? Minor = (int?)subkey.GetValue("CurrentMinorVersionNumber");
-                    int? UBR = (int?)subkey.GetValue("UBR");
-                    string Branch = null;
+                    int? major = (int?)subkey.GetValue("CurrentMajorVersionNumber");
+                    string build = (string)subkey.GetValue("CurrentBuildNumber");
+                    int? minor = (int?)subkey.GetValue("CurrentMinorVersionNumber");
+                    int? ubr = (int?)subkey.GetValue("UBR");
+                    string branch = null;
 
-                    subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion\Update\TargetingInfo\Installed");
+                    subkey = hive.Root.OpenSubKey(
+                        @"Microsoft\Windows NT\CurrentVersion\Update\TargetingInfo\Installed");
                     if (subkey != null)
                     {
-                        foreach (DiscUtils.Registry.RegistryKey sub in subkey.SubKeys)
+                        foreach (RegistryKey sub in subkey.SubKeys)
                         {
                             if (!sub.Name.Contains(".OS."))
                             {
                                 continue;
                             }
 
-                            Branch = sub.GetValue("Branch") as string;
+                            branch = sub.GetValue("Branch") as string;
                         }
                     }
 
                     if (!string.IsNullOrEmpty(buildLab) && buildLab.Count(x => x == '.') == 2)
                     {
-                        var splitLab = buildLab.Split('.');
+                        string[] splitLab = buildLab.Split('.');
 
-                        result.version.BranchName = splitLab[1];
-                        result.version.CompileDate = splitLab[2];
-                        result.version.BuildNumber = ulong.Parse(splitLab[0]);
+                        result.Version.BranchName = splitLab[1];
+                        result.Version.CompileDate = splitLab[2];
+                        result.Version.BuildNumber = ulong.Parse(splitLab[0]);
                     }
 
                     if (!string.IsNullOrEmpty(buildLabEx) && buildLabEx.Count(x => x == '.') == 4)
                     {
-                        var splitLabEx = buildLabEx.Split('.');
+                        string[] splitLabEx = buildLabEx.Split('.');
 
-                        result.version.BranchName = splitLabEx[3];
-                        result.version.CompileDate = splitLabEx[4];
-                        result.version.DeltaVersion = ulong.Parse(splitLabEx[1]);
-                        result.version.BuildNumber = ulong.Parse(splitLabEx[0]);
+                        result.Version.BranchName = splitLabEx[3];
+                        result.Version.CompileDate = splitLabEx[4];
+                        result.Version.DeltaVersion = ulong.Parse(splitLabEx[1]);
+                        result.Version.BuildNumber = ulong.Parse(splitLabEx[0]);
                     }
 
-                    if (Major.HasValue)
+                    if (major.HasValue)
                     {
-                        result.version.MajorVersion = (ulong)Major.Value;
+                        result.Version.MajorVersion = (ulong)major.Value;
                     }
 
-                    if (Minor.HasValue)
+                    if (minor.HasValue)
                     {
-                        result.version.MinorVersion = (ulong)Minor.Value;
+                        result.Version.MinorVersion = (ulong)minor.Value;
                     }
 
-                    if (!string.IsNullOrEmpty(Build))
+                    if (!string.IsNullOrEmpty(build))
                     {
-                        result.version.BuildNumber = ulong.Parse(Build);
+                        result.Version.BuildNumber = ulong.Parse(build);
                     }
 
-                    if (UBR.HasValue)
+                    if (ubr.HasValue)
                     {
-                        result.version.DeltaVersion = (ulong)UBR.Value;
+                        result.Version.DeltaVersion = (ulong)ubr.Value;
                     }
 
-                    if (!string.IsNullOrEmpty(Branch))
+                    if (!string.IsNullOrEmpty(branch))
                     {
-                        result.version.BranchName = Branch;
+                        result.Version.BranchName = branch;
                     }
 
                     if (!string.IsNullOrEmpty(releaseId))
@@ -643,20 +686,24 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                         result.Tag = releaseId;
                     }
                 }
-                catch { };
+                catch
+                {
+                }
 
                 if (!string.IsNullOrEmpty(hvPath))
                 {
                     try
                     {
-                        var content = File.ReadAllText(hvPath, System.Text.Encoding.ASCII).AsSpan();
+                        ReadOnlySpan<char> content = File.ReadAllText(hvPath, Encoding.ASCII).AsSpan();
                         content = content[content.IndexOf("GitEnlistment")..];
                         content = content[(content.IndexOf('.') + 1)..];
                         content = content[..11];
 
-                        result.version.CompileDate = new string(content);
+                        result.Version.CompileDate = new string(content);
                     }
-                    catch { };
+                    catch
+                    {
+                    }
                 }
 
                 try
@@ -664,25 +711,24 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                     string productId = "";
                     bool found = false;
 
-                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
+                    RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
                     if (subkey != null)
                     {
-                        var pidData = subkey.GetValue("DigitalProductId4") as byte[];
-                        if (pidData != null)
+                        if (subkey.GetValue("DigitalProductId4") is byte[] pidData)
                         {
                             pidData = pidData[0x3f8..0x458];
 
                             Span<char> pidString = new char[0x30];
-                            System.Text.Encoding.Unicode.GetChars(pidData, pidString);
+                            Encoding.Unicode.GetChars(pidData, pidString);
                             pidString = pidString[..pidString.IndexOf('\0')];
 
-                            string licenseType = new string(pidString);
+                            string licenseType = new(pidString);
                             result.Licensing = (Licensing)Enum.Parse(typeof(Licensing), licenseType.Split(':')[0]);
                             found = true;
                         }
                     }
 
-                    if(!found)
+                    if (!found)
                     {
                         subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion\DefaultProductKey");
                         if (subkey != null)
@@ -704,64 +750,74 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                         }
                     }
                 }
-                catch { };
+                catch
+                {
+                }
             }
 
-            using (var hiveStream = new FileStream(systemHivePath, FileMode.Open, FileAccess.Read))
-            using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
+            using (FileStream hiveStream = new(systemHivePath, FileMode.Open, FileAccess.Read))
+            using (RegistryHive hive = new(hiveStream))
             {
                 try
                 {
-                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\MUI\UILanguages");
+                    RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\MUI\UILanguages");
 
                     result.LanguageCodes = subkey.GetSubKeyNames();
                 }
-                catch { };
+                catch
+                {
+                }
 
                 try
                 {
-                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\Nls\Language");
+                    RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\Nls\Language");
 
                     string langid = (string)subkey.GetValue("Default");
 
-                    var cultures = CultureInfo.GetCultures(CultureTypes.AllCultures);
+                    CultureInfo[] cultures = CultureInfo.GetCultures(CultureTypes.AllCultures);
 
-                    if (cultures.Any(x => x.LCID == int.Parse(langid, NumberStyles.HexNumber, CultureInfo.CurrentCulture)))
+                    if (cultures.Any(x =>
+                            x.LCID == int.Parse(langid, NumberStyles.HexNumber, CultureInfo.CurrentCulture)))
                     {
-                        var name = cultures.First(x => x.LCID == int.Parse(langid, NumberStyles.HexNumber, CultureInfo.CurrentCulture)).Name;
+                        string name = cultures.First(x =>
+                            x.LCID == int.Parse(langid, NumberStyles.HexNumber, CultureInfo.CurrentCulture)).Name;
                         if (result.LanguageCodes == null ||
-                            result.LanguageCodes != null && !result.LanguageCodes.Any(x => x.Equals(name, StringComparison.InvariantCultureIgnoreCase)))
+                            result.LanguageCodes != null && !result.LanguageCodes.Any(x =>
+                                x.Equals(name, StringComparison.InvariantCultureIgnoreCase)))
                         {
                             if (result.LanguageCodes == null)
                             {
-                                result.LanguageCodes = new string[] { name };
+                                result.LanguageCodes = new[] { name };
                             }
                         }
                     }
                 }
-                catch { };
+                catch
+                {
+                }
             }
 
             return result;
         }
 
-        private static string[] GatherUnstagedEditions(WindowsInstallProviderInterface installProvider)
+        private static string[] GatherUnstagedEditions(IWindowsInstallProviderInterface installProvider)
         {
-            SortedSet<string> report = new SortedSet<string>();
+            SortedSet<string> report = new();
 
-            var packages = installProvider.GetFileSystemEntries().Where(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
+            IEnumerable<string> packages = installProvider.GetFileSystemEntries().Where(x =>
+                x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
 
-            var files = packages.Where(x => x.Count(y => y == '\\') == 1 && x.Contains("."));
+            IEnumerable<string> files = packages.Where(x => x.Count(y => y == '\\') == 1 && x.Contains('.'));
 
             if (files.Any())
             {
                 // This is the final layout
 
-                var neutralNames = files.Select(x => string.Join(".", x.Split('.')[0..^1])).Distinct();
+                IEnumerable<string> neutralNames = files.Select(x => string.Join(".", x.Split('.')[..^1])).Distinct();
 
-                var fileArray = files.ToHashSet();
+                HashSet<string> fileArray = files.ToHashSet();
 
-                foreach (var name in neutralNames)
+                foreach (string name in neutralNames)
                 {
                     if (fileArray.Contains(name + ".mum") &&
                         fileArray.Contains(name + ".cat") &&
@@ -776,8 +832,9 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             {
                 // This is the earlier layout, the folders present are thus the editions
 
-                var editionFolders = packages.Where(x => x.Count(y => y == '\\') == 1);
-                var editions = editionFolders.Select(x => x.Replace(@"packages\", "", StringComparison.InvariantCultureIgnoreCase));
+                IEnumerable<string> editionFolders = packages.Where(x => x.Count(y => y == '\\') == 1);
+                IEnumerable<string> editions = editionFolders.Select(x =>
+                    x.Replace(@"packages\", "", StringComparison.InvariantCultureIgnoreCase));
 
                 report.UnionWith(editions);
             }

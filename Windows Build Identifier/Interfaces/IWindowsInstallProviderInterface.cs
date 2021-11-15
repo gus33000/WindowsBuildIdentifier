@@ -22,10 +22,10 @@
 
 namespace WindowsBuildIdentifier.Interfaces
 {
-    public interface WindowsInstallProviderInterface
+    public interface IWindowsInstallProviderInterface
     {
         string[] GetFileSystemEntries();
-        string ExpandFile(string Entry);
+        string ExpandFile(string entry);
         void Close();
     }
 }

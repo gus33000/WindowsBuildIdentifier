@@ -27,35 +27,32 @@ using System.Linq;
 
 namespace WindowsBuildIdentifier.Interfaces
 {
-    public class WIMInstallProviderInterface : WindowsInstallProviderInterface
+    public class WimInstallProviderInterface : IWindowsInstallProviderInterface
     {
-        private readonly ArchiveFile archiveFile;
+        private readonly ArchiveFile _archiveFile;
 
         private string _index;
 
-        public WIMInstallProviderInterface(ArchiveFile archiveFile, string index = "")
+        public WimInstallProviderInterface(ArchiveFile archiveFile, string index = "")
         {
             _index = index;
-            this.archiveFile = archiveFile;
+            _archiveFile = archiveFile;
         }
 
-        public void SetIndex(string index)
-        {
-            _index = index;
-        }
-
-        public string ExpandFile(string Entry)
+        public string ExpandFile(string entry)
         {
             string pathprefix = string.IsNullOrEmpty(_index)
                 ? ""
-                : _index + (Entry.StartsWith('\\') ? "" : "\\");
+                : _index + (entry.StartsWith('\\') ? "" : "\\");
 
-            if (!archiveFile.Entries.Any(x => x.FileName.Equals(pathprefix + Entry, StringComparison.InvariantCultureIgnoreCase)))
+            if (!_archiveFile.Entries.Any(x =>
+                    x.FileName.Equals(pathprefix + entry, StringComparison.InvariantCultureIgnoreCase)))
             {
                 return null;
             }
 
-            Entry wimEntry = archiveFile.Entries.First(x => x.FileName.Equals(pathprefix + Entry, StringComparison.InvariantCultureIgnoreCase));
+            Entry wimEntry = _archiveFile.Entries.First(x =>
+                x.FileName.Equals(pathprefix + entry, StringComparison.InvariantCultureIgnoreCase));
 
             string tmp = Path.GetTempFileName();
             wimEntry.Extract(tmp);
@@ -67,11 +64,11 @@ namespace WindowsBuildIdentifier.Interfaces
         {
             string pathprefix = string.IsNullOrEmpty(_index) ? "" : _index + @"\";
 
-            string[] entries = archiveFile.Entries.Where(x => x.FileName.StartsWith(pathprefix)).Select(x =>
+            string[] entries = _archiveFile.Entries.Where(x => x.FileName.StartsWith(pathprefix)).Select(x =>
             {
                 if (!string.IsNullOrEmpty(pathprefix))
                 {
-                    return x.FileName.Substring(2);
+                    return x.FileName[2..];
                 }
 
                 return x.FileName;
@@ -82,6 +79,11 @@ namespace WindowsBuildIdentifier.Interfaces
 
         public void Close()
         {
+        }
+
+        public void SetIndex(string index)
+        {
+            _index = index;
         }
     }
 }

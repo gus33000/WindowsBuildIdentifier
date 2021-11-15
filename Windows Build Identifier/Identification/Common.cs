@@ -7,21 +7,21 @@ using System.Text;
 
 namespace WindowsBuildIdentifier.Identification
 {
-    public class Common
+    public static class Common
     {
         public static MachineType GetMachineTypeFromFile(Stream fs)
         {
-            BinaryReader br = new BinaryReader(fs);
+            BinaryReader br = new(fs);
             fs.Seek(0x3c, SeekOrigin.Begin);
-            UInt32 peOffset = br.ReadUInt32();
+            uint peOffset = br.ReadUInt32();
             fs.Seek(peOffset, SeekOrigin.Begin);
-            UInt32 peHead = br.ReadUInt32();
+            uint peHead = br.ReadUInt32();
             if (peHead != 0x00004550) // "PE\0\0", little-endian
             {
                 throw new Exception("Can't find PE header");
             }
 
-            var type = br.ReadUInt16();
+            ushort type = br.ReadUInt16();
 
             Console.WriteLine("Machine type: " + type);
 
@@ -31,19 +31,20 @@ namespace WindowsBuildIdentifier.Identification
             return machineType;
         }
 
-        public static WindowsVersion ParseBuildString(string BuildString)
+        public static WindowsVersion ParseBuildString(string buildString)
         {
-            WindowsVersion verinfo = new WindowsVersion();
+            WindowsVersion verinfo = new();
 
-            if (BuildString.Contains(" built by: ") && BuildString.Contains(" at: ") && BuildString.Count(x => x == '.') == 3)
+            if (buildString.Contains(" built by: ") && buildString.Contains(" at: ") &&
+                buildString.Count(x => x == '.') == 3)
             {
                 // Early version
-                var splitparts = BuildString.Split(' ');
-                var rawversion = splitparts[0];
-                var branch = splitparts[3];
-                var compiledate = splitparts[5];
+                string[] splitparts = buildString.Split(' ');
+                string rawversion = splitparts[0];
+                string branch = splitparts[3];
+                string compiledate = splitparts[5];
 
-                var splitver = rawversion.Split('.');
+                string[] splitver = rawversion.Split('.');
 
                 verinfo.MajorVersion = ulong.Parse(splitver[0]);
                 verinfo.MinorVersion = ulong.Parse(splitver[1]);
@@ -53,16 +54,16 @@ namespace WindowsBuildIdentifier.Identification
                 verinfo.BranchName = branch;
                 verinfo.CompileDate = compiledate;
             }
-            else if (BuildString.Contains(" (") && BuildString.Contains(")") && BuildString.Count(x => x == '.') >= 4)
+            else if (buildString.Contains(" (") && buildString.Contains(')') && buildString.Count(x => x == '.') >= 4)
             {
-                if (BuildString.Contains(" (WinBuild."))
+                if (buildString.Contains(" (WinBuild."))
                 {
                     // MS new thing
 
-                    var splitparts = BuildString.Split(' ');
-                    var rawversion = splitparts[0];
+                    string[] splitparts = buildString.Split(' ');
+                    string rawversion = splitparts[0];
 
-                    var splitver = rawversion.Split('.');
+                    string[] splitver = rawversion.Split('.');
 
                     verinfo.MajorVersion = ulong.Parse(splitver[0]);
                     verinfo.MinorVersion = ulong.Parse(splitver[1]);
@@ -73,16 +74,16 @@ namespace WindowsBuildIdentifier.Identification
                 {
                     // Normal thing
 
-                    var splitparts = BuildString.Split(' ');
-                    var rawversion = splitparts[0];
-                    var rawdetails = splitparts[1];
+                    string[] splitparts = buildString.Split(' ');
+                    string rawversion = splitparts[0];
+                    string rawdetails = splitparts[1];
 
-                    var splitdetails = rawdetails.TrimStart('(').TrimEnd(')').Split('.');
+                    string[] splitdetails = rawdetails.TrimStart('(').TrimEnd(')').Split('.');
 
-                    var branch = splitdetails[0];
-                    var compiledate = splitdetails[1];
+                    string branch = splitdetails[0];
+                    string compiledate = splitdetails[1];
 
-                    var splitver = rawversion.Split('.');
+                    string[] splitver = rawversion.Split('.');
 
                     Console.WriteLine(rawversion);
 
@@ -95,9 +96,9 @@ namespace WindowsBuildIdentifier.Identification
                     verinfo.CompileDate = compiledate;
                 }
             }
-            else if (BuildString.Count(x => x == '.') == 3)
+            else if (buildString.Count(x => x == '.') == 3)
             {
-                var splitver = BuildString.Split('.');
+                string[] splitver = buildString.Split('.');
 
                 verinfo.MajorVersion = ulong.Parse(splitver[0]);
                 verinfo.MinorVersion = ulong.Parse(splitver[1]);
@@ -111,9 +112,14 @@ namespace WindowsBuildIdentifier.Identification
         public static WindowsVersion GetGreaterVersion(WindowsVersion version1, WindowsVersion version2)
         {
             if (version1 == null)
+            {
                 return version2;
+            }
+
             if (version2 == null)
+            {
                 return version1;
+            }
 
             if (version1.MajorVersion != version2.MajorVersion)
             {
@@ -121,6 +127,7 @@ namespace WindowsBuildIdentifier.Identification
                 {
                     return version1;
                 }
+
                 return version2;
             }
 
@@ -130,6 +137,7 @@ namespace WindowsBuildIdentifier.Identification
                 {
                     return version1;
                 }
+
                 return version2;
             }
 
@@ -139,6 +147,7 @@ namespace WindowsBuildIdentifier.Identification
                 {
                     return version1;
                 }
+
                 return version2;
             }
 
@@ -148,6 +157,7 @@ namespace WindowsBuildIdentifier.Identification
                 {
                     return version1;
                 }
+
                 return version2;
             }
 
@@ -157,6 +167,7 @@ namespace WindowsBuildIdentifier.Identification
                 {
                     return version2;
                 }
+
                 if (string.IsNullOrEmpty(version2.CompileDate))
                 {
                     return version1;
@@ -173,6 +184,7 @@ namespace WindowsBuildIdentifier.Identification
                 {
                     return version1;
                 }
+
                 return version2;
             }
 
@@ -181,7 +193,7 @@ namespace WindowsBuildIdentifier.Identification
 
         public static PolicyValue[] ParseProductPolicy(byte[] productPolicy)
         {
-            HashSet<PolicyValue> policyValues = new HashSet<PolicyValue>();
+            HashSet<PolicyValue> policyValues = new();
 
             Console.WriteLine("Parsing product policy");
 
@@ -192,17 +204,17 @@ namespace WindowsBuildIdentifier.Identification
             int headerSize = totalSize - valuesSize - endMarkerSize;
 
             byte[] valueBuffer = productPolicy[headerSize..(headerSize + valuesSize - 1)];
-            using (var innerStream = new MemoryStream(valueBuffer))
-            using (var stream = new BinaryReader(innerStream))
+            using (MemoryStream innerStream = new(valueBuffer))
+            using (BinaryReader stream = new(innerStream))
             {
                 while (innerStream.Position <= innerStream.Length)
                 {
-                    var currentPosition = innerStream.Position;
+                    long currentPosition = innerStream.Position;
 
-                    var totalLength = stream.ReadInt16();
-                    var nameLength = stream.ReadInt16();
-                    var valueType = stream.ReadInt16();
-                    var valueLength = stream.ReadInt16();
+                    short totalLength = stream.ReadInt16();
+                    short nameLength = stream.ReadInt16();
+                    short valueType = stream.ReadInt16();
+                    short valueLength = stream.ReadInt16();
 
                     //
                     // Earlier product policy format (5112 for example)
@@ -211,7 +223,9 @@ namespace WindowsBuildIdentifier.Identification
                     // If we do we skip both
                     //
                     if (valueLength + nameLength + 8 <= totalLength)
+                    {
                         innerStream.Seek(8, SeekOrigin.Current);
+                    }
 
                     string valueName = Encoding.Unicode.GetString(stream.ReadBytes(nameLength));
                     byte[] value = stream.ReadBytes(valueLength);
