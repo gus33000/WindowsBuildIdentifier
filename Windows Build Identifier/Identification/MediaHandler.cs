@@ -21,30 +21,27 @@ namespace WindowsBuildIdentifier.Identification
 
         public class UnsupportedWIMXmlException : Exception { }
 
-        private static string ExtractWIMXml(Stream wimstream)
+        private static string ExtractWIMXml(ArchiveFile archiveFile)
         {
             try
             {
-                using (ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim))
+                if (archiveFile.Entries.Any(x => x.FileName == "[1].xml"))
                 {
-                    if (archiveFile.Entries.Any(x => x.FileName == "[1].xml"))
+                    Entry wimXmlEntry = archiveFile.Entries.First(x => x.FileName == "[1].xml");
+
+                    string xml;
+                    using (MemoryStream memoryStream = new MemoryStream())
                     {
-                        Entry wimXmlEntry = archiveFile.Entries.First(x => x.FileName == "[1].xml");
+                        wimXmlEntry.Extract(memoryStream);
 
-                        string xml;
-                        using (MemoryStream memoryStream = new MemoryStream())
-                        {
-                            wimXmlEntry.Extract(memoryStream);
-
-                            xml = Encoding.Unicode.GetString(memoryStream.ToArray(), 2, (int)memoryStream.Length - 2);
-                        }
-
-                        return xml;
+                        xml = Encoding.Unicode.GetString(memoryStream.ToArray(), 2, (int)memoryStream.Length - 2);
                     }
-                    else if (archiveFile.Entries.Any(x => x.FileName == "Windows"))
-                    {
-                        return archiveFile.GetArchiveComment();
-                    }
+
+                    return xml;
+                }
+                else if (archiveFile.Entries.Any(x => x.FileName == "Windows"))
+                {
+                    return archiveFile.GetArchiveComment();
                 }
 
                 throw new UnsupportedWIMException();
@@ -80,7 +77,9 @@ namespace WindowsBuildIdentifier.Identification
 
             Console.WriteLine("Gathering WIM information XML file");
 
-            string xml = ExtractWIMXml(wimstream);
+
+            using ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim);
+            string xml = ExtractWIMXml(archiveFile);
 
             Console.WriteLine("Parsing WIM information XML file");
             XmlFormats.WIMXml.WIM wim = GetWIMClassFromXml(xml);
@@ -88,13 +87,15 @@ namespace WindowsBuildIdentifier.Identification
             Console.WriteLine($"Found {wim.IMAGE.Length} images in the wim according to the XML");
 
             Console.WriteLine("Evaluating relevant images in the WIM according to the XML");
-            int irelevantcount2 = (wim.IMAGE.Any(x => x.DESCRIPTION.Contains("winpe", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                (wim.IMAGE.Any(x => x.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0);
+            int irelevantcount2 = (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("winpe", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
+                (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0);
 
             Console.WriteLine($"Found {irelevantcount2} irrelevant images in the wim according to the XML");
+
+            var provider = new WIMInstallProviderInterface(archiveFile);
 
             foreach (var image in wim.IMAGE)
             {
@@ -105,11 +106,11 @@ namespace WindowsBuildIdentifier.Identification
                 // If what we're trying to identify isn't just a winpe, and we are accessing a winpe image
                 // skip the image
                 //
-                int irelevantcount = (image.DESCRIPTION.Contains("winpe", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                    (image.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                    (image.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                    (image.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                    (image.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0);
+                int irelevantcount = (image.DESCRIPTION != null && image.DESCRIPTION.Contains("winpe", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                    (image.DESCRIPTION != null && image.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                    (image.DESCRIPTION != null && image.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                    (image.DESCRIPTION != null && image.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
+                    (image.DESCRIPTION != null && image.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0);
 
                 Console.WriteLine($"Index contains {irelevantcount} flags indicating this is a preinstallation environment");
 
@@ -125,7 +126,6 @@ namespace WindowsBuildIdentifier.Identification
 
                 if (index != null && wim.IMAGE[0].INDEX == "0")
                 {
-                    using ArchiveFile archiveFile = new ArchiveFile(wimstream, SevenZipFormat.Wim);
                     if (!archiveFile.Entries.Any(x => x.FileName.StartsWith("0\\")))
                     {
                         WorkaroundForWIMFormatBug = true;
@@ -140,11 +140,9 @@ namespace WindowsBuildIdentifier.Identification
 
                 Console.WriteLine($"Index value: {index}");
 
-                var provider = new WIMInstallProviderInterface(wimstream, index);
+                provider.SetIndex(index);
 
                 var report = InstalledImage.DetectionHandler.IdentifyWindowsNT(provider);
-
-                provider.Close();
 
                 // fallback
                 if ((string.IsNullOrEmpty(report.Sku) || report.Sku == "TerminalServer") && !string.IsNullOrEmpty(image.FLAGS))
@@ -205,7 +203,7 @@ namespace WindowsBuildIdentifier.Identification
                 results.Add(imageIndex);
             }
 
-            wimstream.Dispose();
+            provider.Close();
 
             return results.ToArray();
         }
@@ -575,7 +573,7 @@ namespace WindowsBuildIdentifier.Identification
                 using FileStream isoStream = File.Open(isopath, FileMode.Open, FileAccess.Read);
 
                 VfsFileSystemFacade cd = new CDReader(isoStream, true);
-                if (cd.FileExists(@"README.TXT"))
+                if (cd.FileExists(@"README.TXT") || cd.Root.GetDirectories().Length == 0)
                 {
                     cd = new UdfReader(isoStream);
                 }
@@ -646,6 +644,7 @@ namespace WindowsBuildIdentifier.Identification
                 Console.WriteLine(ex.ToString());
             }
 
+            wim.Dispose();
             return result;
         }
 

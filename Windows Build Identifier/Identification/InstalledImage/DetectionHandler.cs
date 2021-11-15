@@ -49,21 +49,28 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             //
 
             string kernelPath = "";
+            string hvPath = "";
             string shell32Path = "";
             string softwareHivePath = "";
             string systemHivePath = "";
             string userPath = "";
 
             var kernelEntry = fileentries.FirstOrDefault(x =>
-            x.EndsWith(
-                @"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase) &&
-                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase)) ??
-            fileentries.FirstOrDefault(x =>
-                x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase) &&
-                !x.Contains("WinSxS", StringComparison.InvariantCultureIgnoreCase));
+                (x.EndsWith(@"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase) || x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase))
+                && x.Contains("System32", StringComparison.InvariantCultureIgnoreCase));
             if (kernelEntry != null)
             {
                 kernelPath = installProvider.ExpandFile(kernelEntry);
+            }
+
+            var hvEntry = fileentries.FirstOrDefault(x =>
+                (x.EndsWith(@"\hvax64.exe", StringComparison.InvariantCultureIgnoreCase) // AMD64
+                    || x.EndsWith(@"\hvix64.exe", StringComparison.InvariantCultureIgnoreCase) // Intel64
+                    || x.EndsWith(@"\hvaa64.exe", StringComparison.InvariantCultureIgnoreCase)) // ARM64
+                && x.Contains("System32", StringComparison.InvariantCultureIgnoreCase));
+            if (hvEntry != null)
+            {
+                hvPath = installProvider.ExpandFile(hvEntry);
             }
 
             var shell32Entry = fileentries.FirstOrDefault(x => x.EndsWith(@"system32\shell32.dll", StringComparison.InvariantCultureIgnoreCase));
@@ -114,7 +121,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             if (!string.IsNullOrEmpty(softwareHivePath) && !string.IsNullOrEmpty(systemHivePath))
             {
                 Console.WriteLine("Extracting version information from the image 2");
-                info2 = ExtractVersionInfo2(softwareHivePath, systemHivePath);
+                info2 = ExtractVersionInfo2(softwareHivePath, systemHivePath, hvPath);
             }
 
             if (!string.IsNullOrEmpty(userPath))
@@ -150,6 +157,9 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             if (!string.IsNullOrEmpty(kernelPath))
                 File.Delete(kernelPath);
 
+            if (!string.IsNullOrEmpty(hvPath))
+                File.Delete(hvPath);
+
             WindowsVersion correctVersion = Common.GetGreaterVersion(info.version, info2.version);
             correctVersion = Common.GetGreaterVersion(correctVersion, info3.version);
 
@@ -171,8 +181,8 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 ulong buildwindow = report.BuildNumber + 50;
                 foreach (var binary in installProvider.GetFileSystemEntries())
                 {
-                    if (binary.EndsWith(".dll", StringComparison.InvariantCultureIgnoreCase) || 
-                        binary.EndsWith(".exe", StringComparison.InvariantCultureIgnoreCase) || 
+                    if (binary.EndsWith(".dll", StringComparison.InvariantCultureIgnoreCase) ||
+                        binary.EndsWith(".exe", StringComparison.InvariantCultureIgnoreCase) ||
                         binary.EndsWith(".sys", StringComparison.InvariantCultureIgnoreCase))
                     {
                         string file = "";
@@ -209,7 +219,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
             #region Edition Gathering
             bool IsUnstaged = fileentries.Any(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
-            
+
             if (IsUnstaged)
             {
                 report.Sku = "Unstaged";
@@ -247,7 +257,9 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             else if (!string.IsNullOrEmpty(systemHivePath))
             {
                 Console.WriteLine("Extracting additional edition information");
-                report.Sku = ExtractEditionFromRegistry(systemHivePath);
+                var skuData = ExtractEditionFromRegistry(systemHivePath, softwareHivePath);
+                report.BaseSku = skuData.baseSku;
+                report.Sku = skuData.sku;
             }
             #endregion
 
@@ -373,7 +385,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             }
             catch
             {
-                
+
             }
 
             var ver = info.FileVersion;
@@ -393,9 +405,33 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             return result;
         }
 
-        private static string ExtractEditionFromRegistry(string systemHivePath)
+        private static (string baseSku, string sku) ExtractEditionFromRegistry(string systemHivePath, string softwareHivePath)
         {
-            string sku = "";
+            (string baseSku, string sku) ret = ("", "");
+
+            using (var softHiveStream = new FileStream(softwareHivePath, FileMode.Open, FileAccess.Read))
+            using (DiscUtils.Registry.RegistryHive softHive = new DiscUtils.Registry.RegistryHive(softHiveStream))
+            {
+                try
+                {
+                    DiscUtils.Registry.RegistryKey subkey = softHive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
+                    if (subkey != null)
+                    {
+                        var edition = subkey.GetValue("EditionID") as string;
+                        var compositionEdition = subkey.GetValue("CompositionEditionID") as string;
+
+                        if (!string.IsNullOrEmpty(edition) && !string.IsNullOrEmpty(compositionEdition))
+                        {
+                            return (compositionEdition, edition);
+                        }
+                        else if (!string.IsNullOrEmpty(edition))
+                        {
+                            return (edition, edition);
+                        }
+                    }
+                }
+                catch { }
+            }
 
             using (var hiveStream = new FileStream(systemHivePath, FileMode.Open, FileAccess.Read))
             using (DiscUtils.Registry.RegistryHive hive = new DiscUtils.Registry.RegistryHive(hiveStream))
@@ -404,45 +440,56 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 {
                     DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"ControlSet001\Control\ProductOptions");
 
-                    if (subkey.GetValue("SubscriptionPfnList") != null)
-                    {
-                        var pfn = ((string[])subkey.GetValue("SubscriptionPfnList"))[0];
-                        var product = pfn.Split(".")[2];
-                        product = product.Replace("Pro", "Professional");
-                        sku = product;
-                        Console.WriteLine("Effective SKU: " + sku);
-                    }
-                    else
-                    {
-                        var prodpol = (byte[])subkey.GetValue("ProductPolicy");
+                    var prodpol = (byte[])subkey.GetValue("ProductPolicy");
+                    var policies = Common.ParseProductPolicy(prodpol);
 
-                        var policies = Common.ParseProductPolicy(prodpol);
+                    var pol = policies.FirstOrDefault(x => x.Name == "Kernel-ProductInfo");
+                    if (pol != null && pol.Type == 4)
+                    {
+                        int product = BitConverter.ToInt32(pol.Data);
+                        Console.WriteLine("Detected product id: " + product);
 
-                        if (policies.Any(x => x.Name == "Kernel-ProductInfo"))
+                        if (Enum.IsDefined(typeof(Product), product))
                         {
-                            var pol = policies.First(x => x.Name == "Kernel-ProductInfo");
-
-                            if (pol.Type == 4)
-                            {
-                                int product = BitConverter.ToInt32(pol.Data);
-                                Console.WriteLine("Detected product id: " + product);
-
-                                if (Enum.IsDefined(typeof(Product), product))
-                                {
-                                    sku = Enum.GetName(typeof(Product), product);
-                                }
-                                else
-                                {
-                                    sku = $"UnknownAdditional{product.ToString("X")}";
-                                }
-
-                                Console.WriteLine("Effective SKU: " + sku);
-                            }
+                            ret.baseSku = Enum.GetName(typeof(Product), product);
                         }
+                        else
+                        {
+                            ret.baseSku = $"UnknownAdditional{product.ToString("X")}";
+                        }
+
+                        ret.sku = ret.baseSku;
+                        Console.WriteLine("Base SKU: " + ret.baseSku);
                     }
+
+                    pol = policies.FirstOrDefault(x => x.Name == "Kernel-BrandingInfo");
+                    if (pol != null && pol.Type == 4)
+                    {
+                        int product = BitConverter.ToInt32(pol.Data);
+                        Console.WriteLine("Detected product id: " + product);
+
+                        if (Enum.IsDefined(typeof(Product), product))
+                        {
+                            ret.sku = Enum.GetName(typeof(Product), product);
+                        }
+                        else
+                        {
+                            ret.sku = $"UnknownAdditional{product.ToString("X")}";
+                        }
+
+                        if (string.IsNullOrEmpty(ret.baseSku))
+                        {
+                            ret.baseSku = ret.sku;
+                        }
+
+                        Console.WriteLine("Branding SKU: " + ret.sku);
+                    }
+
+                    return ret;
                 }
                 catch { };
 
+                string sku = "";
                 if (string.IsNullOrEmpty(sku))
                 {
                     try
@@ -503,12 +550,13 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                     }
                     catch { };
                 }
+
+                return (sku, sku);
             }
 
-            return sku;
         }
 
-        private static VersionInfo2 ExtractVersionInfo2(string softwareHivePath, string systemHivePath)
+        private static VersionInfo2 ExtractVersionInfo2(string softwareHivePath, string systemHivePath, string hvPath)
         {
             VersionInfo2 result = new VersionInfo2();
 
@@ -526,9 +574,25 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
                     string releaseId = (string)subkey.GetValue("ReleaseId");
 
-                    int? UBR = (int?)subkey.GetValue("UBR");
                     int? Major = (int?)subkey.GetValue("CurrentMajorVersionNumber");
+                    string Build = (string)subkey.GetValue("CurrentBuildNumber");
                     int? Minor = (int?)subkey.GetValue("CurrentMinorVersionNumber");
+                    int? UBR = (int?)subkey.GetValue("UBR");
+                    string Branch = null;
+
+                    subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion\Update\TargetingInfo\Installed");
+                    if (subkey != null)
+                    {
+                        foreach (DiscUtils.Registry.RegistryKey sub in subkey.SubKeys)
+                        {
+                            if (!sub.Name.Contains(".OS."))
+                            {
+                                continue;
+                            }
+
+                            Branch = sub.GetValue("Branch") as string;
+                        }
+                    }
 
                     if (!string.IsNullOrEmpty(buildLab) && buildLab.Count(x => x == '.') == 2)
                     {
@@ -549,11 +613,6 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                         result.version.BuildNumber = ulong.Parse(splitLabEx[0]);
                     }
 
-                    if (UBR.HasValue)
-                    {
-                        result.version.DeltaVersion = (ulong)UBR.Value;
-                    }
-
                     if (Major.HasValue)
                     {
                         result.version.MajorVersion = (ulong)Major.Value;
@@ -564,6 +623,21 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                         result.version.MinorVersion = (ulong)Minor.Value;
                     }
 
+                    if (!string.IsNullOrEmpty(Build))
+                    {
+                        result.version.BuildNumber = ulong.Parse(Build);
+                    }
+
+                    if (UBR.HasValue)
+                    {
+                        result.version.DeltaVersion = (ulong)UBR.Value;
+                    }
+
+                    if (!string.IsNullOrEmpty(Branch))
+                    {
+                        result.version.BranchName = Branch;
+                    }
+
                     if (!string.IsNullOrEmpty(releaseId))
                     {
                         result.Tag = releaseId;
@@ -571,27 +645,63 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 }
                 catch { };
 
+                if (!string.IsNullOrEmpty(hvPath))
+                {
+                    try
+                    {
+                        var content = File.ReadAllText(hvPath, System.Text.Encoding.ASCII).AsSpan();
+                        content = content[content.IndexOf("GitEnlistment")..];
+                        content = content[(content.IndexOf('.') + 1)..];
+                        content = content[..11];
+
+                        result.version.CompileDate = new string(content);
+                    }
+                    catch { };
+                }
+
                 try
                 {
                     string productId = "";
+                    bool found = false;
 
-                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion\DefaultProductKey");
+                    DiscUtils.Registry.RegistryKey subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion");
                     if (subkey != null)
                     {
-                        productId = (string)subkey.GetValue("ProductId");
+                        var pidData = subkey.GetValue("DigitalProductId4") as byte[];
+                        if (pidData != null)
+                        {
+                            pidData = pidData[0x3f8..0x458];
+
+                            Span<char> pidString = new char[0x30];
+                            System.Text.Encoding.Unicode.GetChars(pidData, pidString);
+                            pidString = pidString[..pidString.IndexOf('\0')];
+
+                            string licenseType = new string(pidString);
+                            result.Licensing = (Licensing)Enum.Parse(typeof(Licensing), licenseType.Split(':')[0]);
+                            found = true;
+                        }
                     }
-                    else
+
+                    if(!found)
                     {
-                        subkey = hive.Root.OpenSubKey(@"Microsoft\Windows\CurrentVersion");
+                        subkey = hive.Root.OpenSubKey(@"Microsoft\Windows NT\CurrentVersion\DefaultProductKey");
                         if (subkey != null)
                         {
                             productId = (string)subkey.GetValue("ProductId");
                         }
-                    }
+                        else
+                        {
+                            subkey = hive.Root.OpenSubKey(@"Microsoft\Windows\CurrentVersion");
+                            if (subkey != null)
+                            {
+                                productId = (string)subkey.GetValue("ProductId");
+                            }
+                        }
 
-                    if (!string.IsNullOrEmpty(productId))
-                    {
-                        result.Licensing = productId.Contains("OEM") ? Licensing.OEM : Licensing.Retail;
+                        if (!string.IsNullOrEmpty(productId))
+                        {
+                            result.Licensing = productId.Contains("OEM") ? Licensing.OEM : Licensing.Retail;
+                        }
                     }
                 }
                 catch { };

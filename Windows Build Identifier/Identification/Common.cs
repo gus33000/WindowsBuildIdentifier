@@ -164,7 +164,7 @@ namespace WindowsBuildIdentifier.Identification
 
                 CultureInfo provider = CultureInfo.InvariantCulture;
 
-                string format = "yyMMDD-HHmm";
+                const string format = "yyMMdd-HHmm";
 
                 DateTime date1 = DateTime.ParseExact(version1.CompileDate, format, provider);
                 DateTime date2 = DateTime.ParseExact(version2.CompileDate, format, provider);
@@ -249,6 +249,7 @@ namespace WindowsBuildIdentifier.Identification
             Console.WriteLine("Architecture : " + report.Architecture);
             Console.WriteLine("BuildType    : " + report.BuildType);
             Console.WriteLine("Types        : " + typedisp);
+            Console.WriteLine("Base Sku     : " + report.BaseSku);
             Console.WriteLine("Sku          : " + report.Sku);
             Console.WriteLine("Editions     : " + editiondisp);
             Console.WriteLine("Licensing    : " + report.Licensing);

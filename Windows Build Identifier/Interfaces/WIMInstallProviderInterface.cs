@@ -29,20 +29,26 @@ namespace WindowsBuildIdentifier.Interfaces
 {
     public class WIMInstallProviderInterface : WindowsInstallProviderInterface
     {
-        private readonly Stream _wimstream;
-        private readonly string _index;
         private readonly ArchiveFile archiveFile;
 
-        public WIMInstallProviderInterface(Stream wimstream, string index)
+        private string _index;
+
+        public WIMInstallProviderInterface(ArchiveFile archiveFile, string index = "")
         {
-            _wimstream = wimstream;
             _index = index;
-            archiveFile = new ArchiveFile(_wimstream, SevenZipFormat.Wim);
+            this.archiveFile = archiveFile;
+        }
+
+        public void SetIndex(string index)
+        {
+            _index = index;
         }
 
         public string ExpandFile(string Entry)
         {
-            string pathprefix = string.IsNullOrEmpty(_index) ? "" : _index + @"\";
+            string pathprefix = string.IsNullOrEmpty(_index)
+                ? ""
+                : _index + (Entry.StartsWith('\\') ? "" : "\\");
 
             if (!archiveFile.Entries.Any(x => x.FileName.Equals(pathprefix + Entry, StringComparison.InvariantCultureIgnoreCase)))
             {
@@ -76,7 +82,6 @@ namespace WindowsBuildIdentifier.Interfaces
 
         public void Close()
         {
-            archiveFile.Dispose();
         }
     }
 }

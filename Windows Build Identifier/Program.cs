@@ -96,7 +96,7 @@ namespace WindowsBuildIdentifier
             [Option('m', "media", Required = true, HelpText = "The media file to work on.")]
             public string Media { get; set; }
 
-            [Option('o', "output", Required = true, HelpText = "The destination path for the windows index file.")]
+            [Option('o', "output", HelpText = "The destination path for the windows index file.")]
             public string Output { get; set; }
         }
 
@@ -119,7 +119,7 @@ namespace WindowsBuildIdentifier
             [Option('m', "media", Required = true, HelpText = "The media file to work on.")]
             public string Media { get; set; }
 
-            [Option('w', "windows-index", Required = true, HelpText = "The path of the windows index file.")]
+            [Option('w', "windows-index", HelpText = "The path of the windows index file.")]
             public string WindowsIndex { get; set; }
         }
 
@@ -154,7 +154,19 @@ namespace WindowsBuildIdentifier
 
         public static string ReplaceInvalidChars(string filename)
         {
-            return Path.Join(filename.Replace(Path.GetFileName(filename), ""),  string.Join("_", Path.GetFileName(filename).Split(Path.GetInvalidFileNameChars())));
+            string dir = Path.GetDirectoryName(filename);
+            char[] file = Path.GetFileName(filename).ToCharArray();
+
+            char[] remove = Path.GetInvalidFileNameChars();
+            for (int i = 0; i < file.Length; i++)
+            {
+                if (remove.Contains(file[i]))
+                {
+                    file[i] = '_';
+                }
+            }
+
+            return Path.Join(dir, file);
         }
 
         private static (string, string) GetAdequateNameFromImageIndexes(WindowsImageIndex[] imageIndexes)
@@ -171,11 +183,11 @@ namespace WindowsBuildIdentifier
             }
 
             var types = f.Types;
-            var licensings = new HashSet<Licensing> { f.Licensing };
-            var languages = f.LanguageCodes != null ? f.LanguageCodes.ToHashSet() : new HashSet<string>() { "lang-unknown" };
-            var skus = new HashSet<string> { f.Sku.Replace("Server", "") };
-
-            string archstring = f.Architecture.ToString() + f.BuildType.ToString();
+            var licensings = new SortedSet<Licensing> { f.Licensing };
+            var languages = new SortedSet<string>(f.LanguageCodes != null ? f.LanguageCodes : new string[] { "lang-unknown" });
+            var skus = new SortedSet<string> { f.Sku.Replace("Server", "") };
+            var baseSkus = new SortedSet<string> { f.Sku.Replace("Server", "") };
+            var archs = new SortedSet<string> { $"{f.Architecture}{f.BuildType}" };
 
             for (int i = 1; i < imageIndexes.Length; i++)
             {
@@ -187,20 +199,47 @@ namespace WindowsBuildIdentifier
                 {
                     licensings.Add(d.Licensing);
                 }
-                languages = languages.Union(d.LanguageCodes).ToHashSet();
+                languages = new SortedSet<string>(languages.Union(d.LanguageCodes));
+
                 if (!skus.Contains(d.Sku.Replace("Server", "")))
                 {
                     skus.Add(d.Sku.Replace("Server", ""));
                 }
-                archstring += "-" + d.Architecture.ToString() + d.BuildType.ToString();
+
+                if (d.BaseSku != null && !baseSkus.Contains(d.BaseSku.Replace("Server", "")))
+                {
+                    baseSkus.Add(d.BaseSku.Replace("Server", ""));
+                }
+
+                if (!archs.Contains($"{f.Architecture}{f.BuildType}"))
+                {
+                    archs.Add($"{f.Architecture}{f.BuildType}");
+                }
+            }
+
+            // Don't include core SKUs in filename list if full is also included
+            foreach (string sku in skus.ToArray())
+            {
+                if (sku.Length >= 5 && sku.EndsWith("Core") && skus.Contains(sku[..^4]))
+                {
+                    skus.Remove(sku);
+                }
+            }
+            foreach (string baseSku in baseSkus.ToArray())
+            {
+                if (baseSku.Length >= 5 && baseSku.EndsWith("Core") && baseSkus.Contains(baseSku[..^4]))
+                {
+                    baseSkus.Remove(baseSku);
+                }
             }
 
             Console.WriteLine($"Build tag: {buildtag}");
             Console.WriteLine();
 
-            string licensingstr = licensings.Count == 0 ? "" : "_" + string.Join(" -", licensings);
+            string skustr = skus.Count > 5 && baseSkus.Count < skus.Count ? string.Join("-", baseSkus) + "-multi" : string.Join("-", skus);
+            string licensingstr = licensings.Count == 0 ? "" : "_" + string.Join("-", licensings);
 
-            var filename = $"{archstring}_{string.Join("-", types)}-{string.Join("-", skus)}{licensingstr}_{string.Join("-", languages)}";
+            var filename = $"{string.Join("-", archs)}_{string.Join("-", types)}-{skustr}{licensingstr}_{string.Join("-", languages)}";
 
             return (buildtag, filename);
         }
@@ -230,7 +269,15 @@ namespace WindowsBuildIdentifier
                     case "wim":
                     case "esd":
                         {
-                            result = new FileItem[] { new FileItem() { Metadata = new MetaData() { WindowsImageIndexes = Identification.MediaHandler.IdentifyWindowsFromWIM(File.OpenRead(file), true) } } };
+                            var images = Identification.MediaHandler.IdentifyWindowsFromWIM(File.OpenRead(file), true);
+                            if (images.Length > 0)
+                            {
+                                result = new FileItem[] { new FileItem() { Metadata = new MetaData() { WindowsImageIndexes = images } } };
+                            }
+                            else
+                            {
+                                continue;
+                            }
                             break;
                         }
                     default:
@@ -341,7 +388,15 @@ namespace WindowsBuildIdentifier
                     case "wim":
                     case "esd":
                         {
-                            result = new FileItem[] { new FileItem() { Metadata = new MetaData() { WindowsImageIndexes = Identification.MediaHandler.IdentifyWindowsFromWIM(File.OpenRead(file), true) } } };
+                            var images = Identification.MediaHandler.IdentifyWindowsFromWIM(File.OpenRead(file), true);
+                            if (images.Length > 0)
+                            {
+                                result = new FileItem[] { new FileItem() { Metadata = new MetaData() { WindowsImageIndexes = images } } };
+                            }
+                            else
+                            {
+                                continue;
+                            }
                             break;
                         }
                     default:
@@ -417,6 +472,11 @@ namespace WindowsBuildIdentifier
         {
             PrintBanner();
 
+            if (string.IsNullOrEmpty(opts.WindowsIndex))
+            {
+                opts.WindowsIndex = $"{opts.Media}.meta_id.xml";
+            }
+
             Console.WriteLine("Input xml file: " + opts.WindowsIndex);
 
             Console.WriteLine("Input media: " + opts.Media);
@@ -458,19 +518,35 @@ namespace WindowsBuildIdentifier
             if (!string.IsNullOrEmpty(label))
                 dst = filename + "-" + label + "." + fileextension;
 
-            dst = string.Join(@"\", opts.Media.Split(@"\")[0..^1]) + @"\" + dst;
+            dst = Path.Combine(Path.GetDirectoryName(opts.WindowsIndex), ReplaceInvalidChars(dst));
 
             Console.WriteLine($"Target filename: {dst}");
             Console.WriteLine();
 
-            if (opts.Media == ReplaceInvalidChars(dst))
+            if (opts.Media == dst)
             {
                 Console.WriteLine("Nothing to do, file name is already good");
             }
             else
             {
                 Console.WriteLine("Renaming");
-                File.Move(opts.Media, ReplaceInvalidChars(dst));
+                File.Move(opts.Media, dst);
+
+                if (opts.WindowsIndex.Contains(opts.Media))
+                {
+                    File.Move(opts.WindowsIndex, opts.WindowsIndex.Replace(opts.Media, dst));
+                }
+
+                string sha1File = $"{opts.Media}.sha1";
+                if (File.Exists(sha1File))
+                {
+                    Console.WriteLine("Update SHA-1 Checksum File");
+                    string sha1Content = File.ReadAllText(sha1File);
+                    sha1Content = sha1Content.Replace(opts.Media, Path.GetFileName(dst));
+                    sha1Content = sha1Content.Replace(Path.GetFileName(opts.Media), Path.GetFileName(dst));
+                    File.WriteAllText($"{dst}.sha1", sha1Content);
+                    File.Delete(sha1File);
+                }
             }
 
             Console.WriteLine("Done.");
@@ -592,6 +668,11 @@ namespace WindowsBuildIdentifier
             DiscUtils.Complete.SetupHelper.SetupComplete();
 
             var file = opts.Media;
+            if (string.IsNullOrEmpty(opts.Output))
+            {
+                opts.Output = $"{file}.meta_id.xml";
+            }
+
             var extension = file.Split(".")[^1];
 
             switch (extension.ToLower())
@@ -634,8 +715,7 @@ namespace WindowsBuildIdentifier
 
                             File.WriteAllText(opts.Output, xml);
                         }
-
-                        if (result.Any(x => x.Location.ToLower() == @"\sources\install.esd"))
+                        else if (result.Any(x => x.Location.ToLower() == @"\sources\install.esd"))
                         {
                             var wimtag = result.First(x => x.Location.ToLower() == @"\sources\install.esd");
 
@@ -659,8 +739,31 @@ namespace WindowsBuildIdentifier
 
                             File.WriteAllText(opts.Output, xml);
                         }
+                        else if (result.Any(x => x.Location.ToLower() == @"\sources\boot.wim"))
+                        {
+                            var wimtag = result.First(x => x.Location.ToLower() == @"\sources\boot.wim");
 
-                        if (result.Any(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")))
+                            XmlSerializer xsSubmit = new XmlSerializer(typeof(WindowsImageIndex[]));
+                            string xml = "";
+
+                            using (var sww = new StringWriter())
+                            {
+                                XmlWriterSettings settings = new XmlWriterSettings();
+                                settings.Indent = true;
+                                settings.IndentChars = "     ";
+                                settings.NewLineOnAttributes = false;
+                                settings.OmitXmlDeclaration = true;
+
+                                using (XmlWriter writer = XmlWriter.Create(sww, settings))
+                                {
+                                    xsSubmit.Serialize(writer, wimtag.Metadata.WindowsImageIndexes);
+                                    xml = sww.ToString();
+                                }
+                            }
+
+                            File.WriteAllText(opts.Output, xml);
+                        }
+                        else if (result.Any(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")))
                         {
                             var txtsetups = result.Where(x => x.Location.ToLower().EndsWith(@"\txtsetup.sif")).Select(x => x.Metadata.WindowsImageIndexes);
 
@@ -853,6 +956,7 @@ namespace WindowsBuildIdentifier
             Console.WriteLine("Release Identifier Tool");
             Console.WriteLine("Release Database Indexing Toolset");
             Console.WriteLine("Gustave Monce (@gus33000) (c) 2009-2020");
+            Console.WriteLine("Thomas Hounsell (c) 2021");
             Console.WriteLine();
         }
 
