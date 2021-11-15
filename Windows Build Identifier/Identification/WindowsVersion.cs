@@ -1,11 +1,12 @@
-﻿namespace WindowsBuildIdentifier.Identification;
-
-public class WindowsVersion
+﻿namespace WindowsBuildIdentifier.Identification
 {
-    public string BranchName;
-    public ulong BuildNumber;
-    public string CompileDate;
-    public ulong DeltaVersion;
-    public ulong MajorVersion;
-    public ulong MinorVersion;
+    public class WindowsVersion
+    {
+        public string BranchName;
+        public ulong BuildNumber;
+        public string CompileDate;
+        public ulong DeltaVersion;
+        public ulong MajorVersion;
+        public ulong MinorVersion;
+    }
 }

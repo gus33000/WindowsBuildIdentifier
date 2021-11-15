@@ -1,8 +1,9 @@
-﻿namespace WindowsBuildIdentifier.Identification;
-
-public enum Licensing
+﻿namespace WindowsBuildIdentifier.Identification
 {
-    Retail,
-    OEM,
-    Volume
+    public enum Licensing
+    {
+        Retail,
+        OEM,
+        Volume
+    }
 }

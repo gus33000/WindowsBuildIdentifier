@@ -1,7 +1,8 @@
-﻿namespace WindowsBuildIdentifier.Identification;
-
-public enum BuildType
+﻿namespace WindowsBuildIdentifier.Identification
 {
-    fre,
-    chk
+    public enum BuildType
+    {
+        fre,
+        chk
+    }
 }

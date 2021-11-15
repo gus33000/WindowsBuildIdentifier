@@ -1,8 +1,9 @@
-﻿namespace WindowsBuildIdentifier.Identification;
-
-public enum Type
+﻿namespace WindowsBuildIdentifier.Identification
 {
-    Client,
-    Server,
-    ServerV
+    public enum Type
+    {
+        Client,
+        Server,
+        ServerV
+    }
 }

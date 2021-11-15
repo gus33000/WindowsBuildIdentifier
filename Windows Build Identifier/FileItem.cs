@@ -1,19 +1,20 @@
-﻿namespace WindowsBuildIdentifier;
-
-public class FileItem
+﻿namespace WindowsBuildIdentifier
 {
-    public string[] Attributes;
+    public class FileItem
+    {
+        public string[] Attributes;
 
-    public string CreationTime;
+        public string CreationTime;
 
-    public Hash Hash;
-    public string LastAccessTime;
-    public string LastWriteTime;
-    public string Location;
+        public Hash Hash;
+        public string LastAccessTime;
+        public string LastWriteTime;
+        public string Location;
 
-    public MetaData Metadata;
+        public MetaData Metadata;
 
-    public string Size;
+        public string Size;
 
-    public Version Version;
+        public Version Version;
+    }
 }

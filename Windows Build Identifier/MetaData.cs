@@ -1,8 +1,9 @@
 ﻿using WindowsBuildIdentifier.Identification;
 
-namespace WindowsBuildIdentifier;
-
-public class MetaData
+namespace WindowsBuildIdentifier
 {
-    public WindowsImageIndex[] WindowsImageIndexes;
+    public class MetaData
+    {
+        public WindowsImageIndex[] WindowsImageIndexes;
+    }
 }
