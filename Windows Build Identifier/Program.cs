@@ -88,7 +88,9 @@ namespace WindowsBuildIdentifier
             SortedSet<Licensing> licensings = new() { f.Licensing };
             SortedSet<string> languages = new(f.LanguageCodes ?? new[] { "lang-unknown" });
             SortedSet<string> skus = new() { f.Sku.Replace("Server", "") };
-            SortedSet<string> baseSkus = new() { f.Sku.Replace("Server", "") };
+            SortedSet<string> baseSkus = string.IsNullOrEmpty(f.BaseSku)
+                ? new()
+                : new() { f.BaseSku.Replace("Server", "") };
             SortedSet<string> archs = new() { $"{f.Architecture}{f.BuildType}" };
 
             for (int i = 1; i < imageIndexes.Length; i++)
@@ -207,16 +209,16 @@ namespace WindowsBuildIdentifier
 
                 WindowsImageIndex[] windowsImageIndexes = files[0].Metadata.WindowsImageIndexes;
 
-                if (files.Any(x => x.Location.EndsWith("install.wim", StringComparison.InvariantCultureIgnoreCase)))
+                if (files.Any(x => x.Location.EndsWith("install.wim", StringComparison.OrdinalIgnoreCase)))
                 {
-                    windowsImageIndexes = files.First(x => x.Location.EndsWith("install.wim")).Metadata
+                    windowsImageIndexes = files.First(x => x.Location.EndsWith("install.wim", StringComparison.OrdinalIgnoreCase)).Metadata
                         .WindowsImageIndexes;
                 }
                 else if (files.Any(
-                             x => x.Location.EndsWith("txtsetup.sif", StringComparison.InvariantCultureIgnoreCase)))
+                             x => x.Location.EndsWith("txtsetup.sif", StringComparison.OrdinalIgnoreCase)))
                 {
                     foreach (FileItem vfile in files.Where(x =>
-                                 x.Location.EndsWith("txtsetup.sif", StringComparison.InvariantCultureIgnoreCase)))
+                                 x.Location.EndsWith("txtsetup.sif", StringComparison.OrdinalIgnoreCase)))
                     {
                         windowsImageIndexes = windowsImageIndexes.Union(vfile.Metadata.WindowsImageIndexes).ToArray();
                     }
@@ -340,16 +342,16 @@ namespace WindowsBuildIdentifier
 
                 WindowsImageIndex[] windowsImageIndexes = files[0].Metadata.WindowsImageIndexes;
 
-                if (files.Any(x => x.Location.EndsWith("install.wim", StringComparison.InvariantCultureIgnoreCase)))
+                if (files.Any(x => x.Location.EndsWith("install.wim", StringComparison.OrdinalIgnoreCase)))
                 {
-                    windowsImageIndexes = files.First(x => x.Location.EndsWith("install.wim")).Metadata
+                    windowsImageIndexes = files.First(x => x.Location.EndsWith("install.wim", StringComparison.OrdinalIgnoreCase)).Metadata
                         .WindowsImageIndexes;
                 }
                 else if (files.Any(
-                             x => x.Location.EndsWith("txtsetup.sif", StringComparison.InvariantCultureIgnoreCase)))
+                             x => x.Location.EndsWith("txtsetup.sif", StringComparison.OrdinalIgnoreCase)))
                 {
                     foreach (FileItem vfile in files.Where(x =>
-                                 x.Location.EndsWith("txtsetup.sif", StringComparison.InvariantCultureIgnoreCase)))
+                                 x.Location.EndsWith("txtsetup.sif", StringComparison.OrdinalIgnoreCase)))
                     {
                         windowsImageIndexes = windowsImageIndexes.Union(vfile.Metadata.WindowsImageIndexes).ToArray();
                     }
@@ -900,7 +902,7 @@ namespace WindowsBuildIdentifier
             Console.WriteLine();
             Console.WriteLine("Windows Build Identifier (WBI)");
             Console.WriteLine("Gustave Monce (@gus33000) (c) 2018-2021");
-            Console.WriteLine("Thomas Hounsell (c) 2021");
+            Console.WriteLine("Thomas Hounsell (c) 2021-2022");
             Console.WriteLine();
         }
 
