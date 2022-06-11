@@ -28,6 +28,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Xml.Linq;
 using WindowsBuildIdentifier.Interfaces;
 
 namespace WindowsBuildIdentifier.Identification.InstalledImage
@@ -56,52 +57,62 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             string softwareHivePath = "";
             string systemHivePath = "";
             string userPath = "";
+            string virtualEditionsPath = "";
 
-            string kernelEntry = fileentries.FirstOrDefault(x =>
-                (x.EndsWith(@"\ntkrnlmp.exe", StringComparison.InvariantCultureIgnoreCase) ||
-                 x.EndsWith(@"\ntoskrnl.exe", StringComparison.InvariantCultureIgnoreCase))
-                && x.Contains("System32", StringComparison.InvariantCultureIgnoreCase));
+            string kernelEntry = fileentries
+                .Where(x =>
+                    (x.EndsWith(@"\ntkrnlmp.exe", StringComparison.OrdinalIgnoreCase) ||
+                     x.EndsWith(@"\ntoskrnl.exe", StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(x => x.Contains("System32", StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault();
             if (kernelEntry != null)
             {
                 kernelPath = installProvider.ExpandFile(kernelEntry);
             }
 
             string hvEntry = fileentries.FirstOrDefault(x =>
-                (x.EndsWith(@"\hvax64.exe", StringComparison.InvariantCultureIgnoreCase) // AMD64
-                 || x.EndsWith(@"\hvix64.exe", StringComparison.InvariantCultureIgnoreCase) // Intel64
-                 || x.EndsWith(@"\hvaa64.exe", StringComparison.InvariantCultureIgnoreCase)) // ARM64
-                && x.Contains("System32", StringComparison.InvariantCultureIgnoreCase));
+                (x.EndsWith(@"\hvax64.exe", StringComparison.OrdinalIgnoreCase) // AMD64
+                 || x.EndsWith(@"\hvix64.exe", StringComparison.OrdinalIgnoreCase) // Intel64
+                 || x.EndsWith(@"\hvaa64.exe", StringComparison.OrdinalIgnoreCase)) // ARM64
+                && x.Contains("System32", StringComparison.OrdinalIgnoreCase));
             if (hvEntry != null)
             {
                 hvPath = installProvider.ExpandFile(hvEntry);
             }
 
             string shell32Entry = fileentries.FirstOrDefault(x =>
-                x.EndsWith(@"system32\shell32.dll", StringComparison.InvariantCultureIgnoreCase));
+                x.EndsWith(@"system32\shell32.dll", StringComparison.OrdinalIgnoreCase));
             if (shell32Entry != null)
             {
                 shell32Path = installProvider.ExpandFile(shell32Entry);
             }
 
             string softwareHiveEntry = fileentries.FirstOrDefault(x =>
-                x.EndsWith(@"system32\config\software", StringComparison.InvariantCultureIgnoreCase));
+                x.EndsWith(@"system32\config\software", StringComparison.OrdinalIgnoreCase));
             if (softwareHiveEntry != null)
             {
                 softwareHivePath = installProvider.ExpandFile(softwareHiveEntry);
             }
 
             string systemHiveEntry = fileentries.FirstOrDefault(x =>
-                x.EndsWith(@"system32\config\system", StringComparison.InvariantCultureIgnoreCase));
+                x.EndsWith(@"system32\config\system", StringComparison.OrdinalIgnoreCase));
             if (systemHiveEntry != null)
             {
                 systemHivePath = installProvider.ExpandFile(systemHiveEntry);
             }
 
             string userEntry = fileentries.FirstOrDefault(x =>
-                x.EndsWith(@"\system32\user.exe", StringComparison.InvariantCultureIgnoreCase));
+                x.EndsWith(@"\system32\user.exe", StringComparison.OrdinalIgnoreCase));
             if (userEntry != null)
             {
                 userPath = installProvider.ExpandFile(userEntry);
+            }
+
+            string virtualEditionsEntry = fileentries.FirstOrDefault(x =>
+                x.EndsWith(@"\Editions\EditionMappings.xml", StringComparison.OrdinalIgnoreCase));
+            if (virtualEditionsEntry != null)
+            {
+                virtualEditionsPath = installProvider.ExpandFile(virtualEditionsEntry);
             }
 
             #region Version Gathering
@@ -121,7 +132,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 if (report.Architecture == MachineType.x86)
                 {
                     string possibleNec98 = fileentries.FirstOrDefault(x =>
-                        x.Contains(@"system32\hal98", StringComparison.InvariantCultureIgnoreCase));
+                        x.Contains(@"system32\hal98", StringComparison.OrdinalIgnoreCase));
                     if (possibleNec98 != null)
                     {
                         report.Architecture = MachineType.nec98;
@@ -145,7 +156,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             report.Licensing = info2.Licensing;
             report.LanguageCodes = info2.LanguageCodes;
 
-            if (report.LanguageCodes == null || report.LanguageCodes.Length == 0)
+            if (!string.IsNullOrEmpty(kernelPath) && (report.LanguageCodes == null || report.LanguageCodes.Length == 0))
             {
                 FileVersionInfo infover = FileVersionInfo.GetVersionInfo(kernelPath);
 
@@ -188,6 +199,14 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 report.CompileDate = correctVersion.CompileDate;
             }
 
+            if (report.BuildNumber == 0)
+            {
+                Console.WriteLine(
+                    "Couldn't find Windows version data within this image.");
+                // couldn't find a good install within this image
+                return null;
+            }
+
             // we have to scan all binaries because early versions of NT
             // do not report the same versions in all binaries
             if (report.BuildNumber < 1130)
@@ -197,9 +216,9 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                 ulong buildwindow = report.BuildNumber + 50;
                 foreach (string binary in installProvider.GetFileSystemEntries())
                 {
-                    if (binary.EndsWith(".dll", StringComparison.InvariantCultureIgnoreCase) ||
-                        binary.EndsWith(".exe", StringComparison.InvariantCultureIgnoreCase) ||
-                        binary.EndsWith(".sys", StringComparison.InvariantCultureIgnoreCase))
+                    if (binary.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                        binary.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ||
+                        binary.EndsWith(".sys", StringComparison.OrdinalIgnoreCase))
                     {
                         string file = "";
                         try
@@ -244,7 +263,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             #region Edition Gathering
 
             bool isUnstaged =
-                fileentries.Any(x => x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
+                fileentries.Any(x => x.StartsWith(@"packages\", StringComparison.OrdinalIgnoreCase));
 
             if (isUnstaged)
             {
@@ -283,7 +302,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             else if (!string.IsNullOrEmpty(systemHivePath))
             {
                 Console.WriteLine("Extracting additional edition information");
-                (string baseSku, string sku) = ExtractEditionFromRegistry(systemHivePath, softwareHivePath);
+                (string baseSku, string sku) = ExtractEditionFromRegistry(systemHivePath, softwareHivePath, virtualEditionsPath);
                 report.BaseSku = baseSku;
                 report.Sku = sku;
             }
@@ -311,19 +330,19 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             {
                 if (report.BuildNumber > 2195)
                 {
-                    if (report.Sku.Equals("personal", StringComparison.InvariantCultureIgnoreCase))
+                    if (report.Sku.Equals("personal", StringComparison.OrdinalIgnoreCase))
                     {
                         report.Sku = "Home";
                     }
 
-                    if (report.Sku.Equals("advancedserver", StringComparison.InvariantCultureIgnoreCase))
+                    if (report.Sku.Equals("advancedserver", StringComparison.OrdinalIgnoreCase))
                     {
                         report.Sku = "EnterpriseServer";
                     }
                 }
                 else
                 {
-                    if (report.Sku.Equals("EnterpriseServer", StringComparison.InvariantCultureIgnoreCase))
+                    if (report.Sku.Equals("EnterpriseServer", StringComparison.OrdinalIgnoreCase))
                     {
                         report.Sku = "AdvancedServer";
                     }
@@ -331,7 +350,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
                 if (report.BuildNumber >= 1911)
                 {
-                    if (report.Sku.Equals("workstation", StringComparison.InvariantCultureIgnoreCase))
+                    if (report.Sku.Equals("workstation", StringComparison.OrdinalIgnoreCase))
                     {
                         report.Sku = "Professional";
                     }
@@ -342,17 +361,17 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             {
                 foreach (string skuunstaged in report.Editions)
                 {
-                    if (skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
-                        skuunstaged.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase) ||
-                        skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
-                        skuunstaged.EndsWith("v", StringComparison.InvariantCultureIgnoreCase))
+                    if (skuunstaged.Contains("server", StringComparison.OrdinalIgnoreCase) &&
+                        skuunstaged.EndsWith("hyperv", StringComparison.OrdinalIgnoreCase) ||
+                        skuunstaged.Contains("server", StringComparison.OrdinalIgnoreCase) &&
+                        skuunstaged.EndsWith("v", StringComparison.OrdinalIgnoreCase))
                     {
                         if (!report.Types.Contains(Type.ServerV))
                         {
                             report.Types.Add(Type.ServerV);
                         }
                     }
-                    else if (skuunstaged.Contains("server", StringComparison.InvariantCultureIgnoreCase))
+                    else if (skuunstaged.Contains("server", StringComparison.OrdinalIgnoreCase))
                     {
                         if (!report.Types.Contains(Type.Server))
                         {
@@ -370,27 +389,27 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             }
             else if (!string.IsNullOrEmpty(report.Sku))
             {
-                if (report.Sku.Equals("ads", StringComparison.InvariantCultureIgnoreCase))
+                if (report.Sku.Equals("ads", StringComparison.OrdinalIgnoreCase))
                 {
                     report.Sku = "AdvancedServer";
                 }
 
-                if (report.Sku.Equals("pro", StringComparison.InvariantCultureIgnoreCase))
+                if (report.Sku.Equals("pro", StringComparison.OrdinalIgnoreCase))
                 {
                     report.Sku = "Professional";
                 }
 
-                if (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
-                    report.Sku.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase) ||
-                    report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
-                    report.Sku.EndsWith("v", StringComparison.InvariantCultureIgnoreCase))
+                if (report.Sku.Contains("server", StringComparison.OrdinalIgnoreCase) &&
+                    report.Sku.EndsWith("hyperv", StringComparison.OrdinalIgnoreCase) ||
+                    report.Sku.Contains("server", StringComparison.OrdinalIgnoreCase) &&
+                    report.Sku.EndsWith("v", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!report.Types.Contains(Type.ServerV))
                     {
                         report.Types.Add(Type.ServerV);
                     }
                 }
-                else if (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase))
+                else if (report.Sku.Contains("server", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!report.Types.Contains(Type.Server))
                     {
@@ -442,9 +461,21 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
         }
 
         private static (string baseSku, string sku) ExtractEditionFromRegistry(string systemHivePath,
-            string softwareHivePath)
+            string softwareHivePath, string virtualEditionsPath)
         {
             (string baseSku, string sku) ret = ("", "");
+            Dictionary<string, string> virtualEditionsMapping = new Dictionary<string, string>();
+
+            if (!string.IsNullOrEmpty(virtualEditionsPath))
+            {
+                using (FileStream virtualEditionsStream = new(virtualEditionsPath, FileMode.Open, FileAccess.Read))
+                {
+                    var veDoc = XDocument.Load(virtualEditionsStream);
+                    virtualEditionsMapping = veDoc.Descendants("Edition")
+                        .Where(e => e.Attribute("virtual")?.Value == "true" && e.Element("Name") != null && e.Element("ParentEdition") != null)
+                        .ToDictionary(e => e.Element("Name").Value, e => e.Element("ParentEdition").Value);
+                }
+            }
 
             using (FileStream softHiveStream = new(softwareHivePath, FileMode.Open, FileAccess.Read))
             using (RegistryHive softHive = new(softHiveStream))
@@ -456,6 +487,16 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                     {
                         string edition = subkey.GetValue("EditionID") as string;
                         string compositionEdition = subkey.GetValue("CompositionEditionID") as string;
+
+                        if (virtualEditionsMapping.ContainsKey(edition))
+                        {
+                            return (virtualEditionsMapping[edition], edition);
+                        }
+
+                        if (!string.IsNullOrEmpty(virtualEditionsPath))
+                        {
+                            return (edition, edition);
+                        }
 
                         if (!string.IsNullOrEmpty(edition) && !string.IsNullOrEmpty(compositionEdition))
                         {
@@ -783,7 +824,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                             x.LCID == int.Parse(langid, NumberStyles.HexNumber, CultureInfo.CurrentCulture)).Name;
                         if (result.LanguageCodes == null ||
                             result.LanguageCodes != null && !result.LanguageCodes.Any(x =>
-                                x.Equals(name, StringComparison.InvariantCultureIgnoreCase)))
+                                x.Equals(name, StringComparison.OrdinalIgnoreCase)))
                         {
                             if (result.LanguageCodes == null)
                             {
@@ -805,7 +846,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
             SortedSet<string> report = new();
 
             IEnumerable<string> packages = installProvider.GetFileSystemEntries().Where(x =>
-                x.StartsWith(@"packages\", StringComparison.InvariantCultureIgnoreCase));
+                x.StartsWith(@"packages\", StringComparison.OrdinalIgnoreCase));
 
             IEnumerable<string> files = packages.Where(x => x.Count(y => y == '\\') == 1 && x.Contains('.'));
 
@@ -824,7 +865,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
                         fileArray.Contains(name + ".xml"))
                     {
                         // This should be a target edition package
-                        report.Add(name.Replace(@"packages\", "", StringComparison.InvariantCultureIgnoreCase));
+                        report.Add(name.Replace(@"packages\", "", StringComparison.OrdinalIgnoreCase));
                     }
                 }
             }
@@ -834,7 +875,7 @@ namespace WindowsBuildIdentifier.Identification.InstalledImage
 
                 IEnumerable<string> editionFolders = packages.Where(x => x.Count(y => y == '\\') == 1);
                 IEnumerable<string> editions = editionFolders.Select(x =>
-                    x.Replace(@"packages\", "", StringComparison.InvariantCultureIgnoreCase));
+                    x.Replace(@"packages\", "", StringComparison.OrdinalIgnoreCase));
 
                 report.UnionWith(editions);
             }

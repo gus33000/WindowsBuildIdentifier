@@ -87,7 +87,7 @@ namespace WindowsBuildIdentifier
 
         private static string Sanitize(string path1)
         {
-            if (path1.Contains(@"installedrepository\", StringComparison.InvariantCultureIgnoreCase))
+            if (path1.Contains(@"installedrepository\", StringComparison.OrdinalIgnoreCase))
             {
                 string fold1T = path1.ToLower().Split(@"installedrepository\")[0];
                 string fold1 = path1.ToLower().Split(@"installedrepository\")[1];
@@ -111,7 +111,7 @@ namespace WindowsBuildIdentifier
                 return f1;
             }
 
-            if (path1.Contains(@"build\filerepository\", StringComparison.InvariantCultureIgnoreCase))
+            if (path1.Contains(@"build\filerepository\", StringComparison.OrdinalIgnoreCase))
             {
                 string fold1T = path1.ToLower().Split(@"build\filerepository\")[0];
                 string fold1 = path1.ToLower().Split(@"build\filerepository\")[1];
@@ -135,7 +135,7 @@ namespace WindowsBuildIdentifier
                 return f1;
             }
 
-            if (path1.Contains(@"Windows\winsxs\", StringComparison.InvariantCultureIgnoreCase))
+            if (path1.Contains(@"Windows\winsxs\", StringComparison.OrdinalIgnoreCase))
             {
                 string fold1T = path1.ToLower().Split(@"windows\winsxs\")[0];
                 string fold1 = path1.ToLower().Split(@"windows\winsxs\")[1];
@@ -171,7 +171,7 @@ namespace WindowsBuildIdentifier
         {
             string index = @"install.wim\3\";
 
-            if (!path.Contains(index, StringComparison.InvariantCultureIgnoreCase))
+            if (!path.Contains(index, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

@@ -84,11 +84,11 @@ namespace WindowsBuildIdentifier.Identification
             Console.WriteLine($"Found {wim.IMAGE.Length} images in the wim according to the XML");
 
             Console.WriteLine("Evaluating relevant images in the WIM according to the XML");
-            int irelevantcount2 = (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("winpe", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0) +
-                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase)) ? 1 : 0);
+            int irelevantcount2 = (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("winpe", StringComparison.OrdinalIgnoreCase)) ? 1 : 0) +
+                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("setup", StringComparison.OrdinalIgnoreCase)) ? 1 : 0) +
+                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("preinstallation", StringComparison.OrdinalIgnoreCase)) ? 1 : 0) +
+                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("winre", StringComparison.OrdinalIgnoreCase)) ? 1 : 0) +
+                                  (wim.IMAGE.Any(x => x.DESCRIPTION != null && x.DESCRIPTION.Contains("recovery", StringComparison.OrdinalIgnoreCase)) ? 1 : 0);
 
             Console.WriteLine($"Found {irelevantcount2} irrelevant images in the wim according to the XML");
 
@@ -103,11 +103,11 @@ namespace WindowsBuildIdentifier.Identification
                 // If what we're trying to identify isn't just a winpe, and we are accessing a winpe image
                 // skip the image
                 //
-                int irelevantcount = (image.DESCRIPTION != null && image.DESCRIPTION.Contains("winpe", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("setup", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("preinstallation", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("winre", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0) +
-                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("recovery", StringComparison.InvariantCultureIgnoreCase) ? 1 : 0);
+                int irelevantcount = (image.DESCRIPTION != null && image.DESCRIPTION.Contains("winpe", StringComparison.OrdinalIgnoreCase) ? 1 : 0) +
+                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("setup", StringComparison.OrdinalIgnoreCase) ? 1 : 0) +
+                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("preinstallation", StringComparison.OrdinalIgnoreCase) ? 1 : 0) +
+                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("winre", StringComparison.OrdinalIgnoreCase) ? 1 : 0) +
+                                     (image.DESCRIPTION != null && image.DESCRIPTION.Contains("recovery", StringComparison.OrdinalIgnoreCase) ? 1 : 0);
 
                 Console.WriteLine(
                     $"Index contains {irelevantcount} flags indicating this is a preinstallation environment");
@@ -141,6 +141,10 @@ namespace WindowsBuildIdentifier.Identification
                 provider.SetIndex(index);
 
                 WindowsImage report = DetectionHandler.IdentifyWindowsNT(provider);
+                if (report == null)
+                {
+                    continue;
+                }
 
                 // fallback
                 if ((string.IsNullOrEmpty(report.Sku) || report.Sku == "TerminalServer") &&
@@ -152,17 +156,17 @@ namespace WindowsBuildIdentifier.Identification
 
                     report.Types = new HashSet<Type>();
 
-                    if (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
-                        report.Sku.EndsWith("hyperv", StringComparison.InvariantCultureIgnoreCase) ||
-                        report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase) &&
-                        report.Sku.EndsWith("v", StringComparison.InvariantCultureIgnoreCase))
+                    if (report.Sku.Contains("server", StringComparison.OrdinalIgnoreCase) &&
+                        report.Sku.EndsWith("hyperv", StringComparison.OrdinalIgnoreCase) ||
+                        report.Sku.Contains("server", StringComparison.OrdinalIgnoreCase) &&
+                        report.Sku.EndsWith("v", StringComparison.OrdinalIgnoreCase))
                     {
                         if (!report.Types.Contains(Type.ServerV))
                         {
                             report.Types.Add(Type.ServerV);
                         }
                     }
-                    else if (report.Sku.Contains("server", StringComparison.InvariantCultureIgnoreCase))
+                    else if (report.Sku.Contains("server", StringComparison.OrdinalIgnoreCase))
                     {
                         if (!report.Types.Contains(Type.Server))
                         {
@@ -226,6 +230,7 @@ namespace WindowsBuildIdentifier.Identification
 
             WindowsImage report = DetectionHandler.IdentifyWindowsNT(provider);
             report.Sku = fileSystem.GetSkuFromTxtSetupMedia(report.BuildNumber);
+            report.Licensing = fileSystem.GetLicensingFromTxtSetupMedia();
             report = DetectionHandler.FixSkuNames(report, false);
 
             Common.DisplayReport(report);
@@ -393,7 +398,7 @@ namespace WindowsBuildIdentifier.Identification
                                 try
                                 {
                                     if (fileItem.Location.Contains("txtsetup.sif",
-                                            StringComparison.InvariantCultureIgnoreCase))
+                                            StringComparison.OrdinalIgnoreCase))
                                     {
                                         TxtSetupBridge bridge = new(facade,
                                             string.Join("\\", fileItem.Location.Split('\\')[..^1]));
